@@ -13,13 +13,13 @@ from sympy.utilities.lambdify import lambdify
 # --- NumPy ---
 import numpy as np
 # `LikelihoodEvaluator.py` で直接使われているNumPy関数を再エクスポート
-einsum = np.einsum  # np.einsum と区別するため、あるいは利便性のため
+einsum = np.einsum
 power = np.power
 isfinite = np.isfinite
 nan = np.nan
 
 # --- Typing (型ヒント) ---
-from typing import Dict, Callable, Tuple, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Callable, Tuple, Any, Optional, List, TYPE_CHECKING, Sequence # <--- Sequence を追加
 
 # --- SciPy ---
 from scipy import optimize
@@ -35,13 +35,10 @@ import arviz as az
 import logging
 from collections import defaultdict # einsum_sympy.py で使用
 from itertools import product     # einsum_sympy.py で使用
+from dataclasses import dataclass # ここで dataclass をインポート
 
 # --- Interactive Widgets (UI/Notebook用、コアロジックに必須でなければ分離も検討) ---
 import ipywidgets as widgets
 from ipywidgets import (
     interact, fixed, FloatSlider, IntSlider, FloatText, IntText
 )
-
-# --- グローバル定数 (もしあれば) ---
-# 例: INVALID_SREPR_KEY_COMMON = "invalid_sympy_srepr_common"
-# (今回は各ファイルにローカルな定数として残す方が適切かもしれません)

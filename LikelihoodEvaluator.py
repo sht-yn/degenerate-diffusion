@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 # %%
-import sympy as sp
-from sympy import (Array, symbols, factorial, tensorproduct, log, det, Matrix,
-                   Expr, Basic, S, zeros, srepr, oo)
-from sympy.matrices.common import NonInvertibleMatrixError
-from sympy.tensor.array import derive_by_array
+from project_imports import (
+    sp, Array, symbols, factorial, tensorproduct, log, det, Matrix,
+    Expr, Basic, S, zeros, srepr, oo, NonInvertibleMatrixError,
+    derive_by_array, lambdify,
+    np, einsum, power, isfinite, nan, # NumPy関連 (einsumなどはproject_importsで再エクスポート済み)
+    TYPE_CHECKING, Dict, Callable, Tuple, Any, Optional
+)
+
 from einsum_sympy import einsum_sympy
-from sympy.utilities.lambdify import lambdify
-import numpy as np
-from numpy import einsum, power, isfinite, nan
-from typing import TYPE_CHECKING, Dict, Callable, Tuple, Any, Optional
-from DegenerateDiffusionProcess import DegenerateDiffusionProcess
+from DegenerateDiffusionProcess import DegenerateDiffusionProcess # もし同じディレクトリなら
 
 # --- 定数 ---
 INVALID_SREPR_KEY = "invalid_sympy_srepr"

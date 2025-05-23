@@ -1,8 +1,4 @@
-import sympy as sp
-from sympy.tensor.array import ImmutableDenseNDimArray
-from collections import defaultdict
-from itertools import product
-
+from project_imports import sp, ImmutableDenseNDimArray, defaultdict, product, S # Sも追加
 
 def einsum_sympy(subscripts, *operands):
     """
