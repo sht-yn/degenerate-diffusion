@@ -8,6 +8,7 @@ import arviz as az # MCMCの結果を扱うため (bayes_estimate内で使用)
 from typing import Optional, Callable, List, Tuple, Dict # 型ヒントを修正・統一
 import ipywidgets as widgets
 from ipywidgets import interact, fixed, FloatSlider, IntSlider, FloatText, IntText
+import logging
 
 class ParameterEstimator:
     """
@@ -120,8 +121,8 @@ class ParameterEstimator:
         scalar_pytensor_type = pytensor.tensor.TensorType(dtype=param_dtype, shape=())      #
 
         if method.lower() == "mcmc":
-            print(f"Starting MCMC estimation with PyMC...")
-            print(f"  draws={draws}, tune={tune}, chains={chains}, cores={cores}")
+            # print(f"Starting MCMC estimation with PyMC...")
+            # print(f"  draws={draws}, tune={tune}, chains={chains}, cores={cores}")
 
             @as_op(itypes=[vector_pytensor_type], 
                       otypes=[scalar_pytensor_type])
@@ -163,6 +164,11 @@ class ParameterEstimator:
                 
                 idata = None
                 posterior_mean_theta = np.full(num_params, np.nan, dtype=float)
+
+                pymc_logger = logging.getLogger("pymc")
+                original_level = pymc_logger.level
+                pymc_logger.setLevel(logging.WARNING)
+                
                 try:
                     initvals_list = []
                     if num_params > 0 and chains > 0:
@@ -187,8 +193,9 @@ class ParameterEstimator:
                     idata = pm.sample(
                         draws=draws, tune=tune, chains=chains, cores=cores, step = pm.Metropolis(),
                         initvals=initvals_list if initvals_list else None,
+                        progressbar= False
                     )
-                    print("MCMC sampling completed.")
+                    # print("MCMC sampling completed.")
                     if idata is not None and num_params > 0:
                         means_list = []
                         for i in range(num_params):
@@ -198,7 +205,7 @@ class ParameterEstimator:
                                 means_list.append(param_mean.item() if param_mean.ndim == 0 else param_mean)
                             else: means_list.append(np.nan)
                         posterior_mean_theta = np.array(means_list, dtype=float)
-                        print(f"  Posterior mean of theta: {posterior_mean_theta}")
+                        # print(f"  Posterior mean of theta: {posterior_mean_theta}")
                 except Exception as e:
                     print(f"Error during PyMC sampling: {e}")
                 return posterior_mean_theta
@@ -256,6 +263,7 @@ class ParameterEstimator:
             raise ValueError("search_bounds must be a list of (min, max) tuples.")
         
         processed_bounds = [] # 処理済みの境界（クリッピング用）
+
         for low, high in search_bounds:
             processed_bounds.append((
                 -np.inf if low is None else low,
@@ -267,9 +275,21 @@ class ParameterEstimator:
         if not isinstance(initial_estimator, np.ndarray) or initial_estimator.shape != (num_params,):
             raise ValueError(f"initial_estimator must be a numpy array of shape ({num_params},)")
 
-        print(f"Starting One-Step estimation from: {initial_estimator}")
+        # print(f"Starting One-Step estimation from: {initial_estimator}")
         grad_approx = None
         hess_inv_approx = None
+
+                # print(f"  One-Step updated parameters: {theta_new}")
+        def get_scalar(value):
+            if isinstance(value, np.ndarray):
+                if value.size == 1:  # 要素数が1であることも確認
+                    return value.item()
+                else:
+                    raise ValueError("Input NumPy array must have a single element to be converted to a scalar.")
+            elif isinstance(value, (float, int)): # Pythonのネイティブな数値型
+                return float(value) # floatに統一するなら
+            else:
+                raise TypeError(f"Unsupported type: {type(value)}. Expected float, int, or a single-element NumPy array.")
 
         if callable(gradient_objective_function) and not use_numerical_derivatives:
             grad_approx = gradient_objective_function(initial_estimator)
@@ -281,8 +301,12 @@ class ParameterEstimator:
                 params_plus_eps[i] += epsilon
                 params_minus_eps = initial_estimator.copy()
                 params_minus_eps[i] -= epsilon
-                grad_approx[i] = (objective_function(params_plus_eps) - objective_function(params_minus_eps)) / (2 * epsilon)
-            print(f"  Numerically approximated gradient: {grad_approx}")
+                f_plus = objective_function(params_plus_eps)
+                f_minus = objective_function(params_minus_eps)
+                f_plus = get_scalar(f_plus)
+                f_minus = get_scalar(f_minus)
+                grad_approx[i] = (f_plus - f_minus) / (2 * epsilon)
+            # print(f"  Numerically approximated gradient: {grad_approx}")
 
         if callable(hessian_objective_function) and not use_numerical_derivatives:
             hess_matrix = hessian_objective_function(initial_estimator)
@@ -290,10 +314,39 @@ class ParameterEstimator:
                 hess_inv_approx = np.linalg.inv(hess_matrix)
             except np.linalg.LinAlgError:
                 print("  Warning: Hessian matrix is singular. Using pseudo-inverse.")
-                hess_inv_approx = np.linalg.pinv(hess_matrix)
+            hess_inv_approx = np.linalg.pinv(hess_matrix)
         else:
-            print("  Warning: Hessian not provided or numerical Hessian requested (not robustly implemented here). Using identity matrix for H_inv for demonstration.")
-            hess_inv_approx = np.eye(num_params) # 簡易的な代替
+            # 数値的にHessianを計算
+            epsilon = np.sqrt(np.finfo(float).eps)
+            hess_matrix = np.zeros((num_params, num_params))
+            for i in range(num_params):
+                for j in range(num_params):
+                    params_pp = initial_estimator.copy()
+                    params_pm = initial_estimator.copy()
+                    params_mp = initial_estimator.copy()
+                    params_mm = initial_estimator.copy()
+                    params_pp[i] += epsilon
+                    params_pp[j] += epsilon
+                    params_pm[i] += epsilon
+                    params_pm[j] -= epsilon
+                    params_mp[i] -= epsilon
+                    params_mp[j] += epsilon
+                    params_mm[i] -= epsilon
+                    params_mm[j] -= epsilon
+                    f_pp = objective_function(params_pp)
+                    f_pm = objective_function(params_pm)
+                    f_mp = objective_function(params_mp)
+                    f_mm = objective_function(params_mm)
+                    f_pp = get_scalar(f_pp)
+                    f_pm = get_scalar(f_pm)
+                    f_mp = get_scalar(f_mp)
+                    f_mm = get_scalar(f_mm)
+                    hess_matrix[i, j] = (f_pp - f_pm - f_mp + f_mm) / (4 * epsilon ** 2)
+            try:
+                hess_inv_approx = np.linalg.inv(hess_matrix)
+            except np.linalg.LinAlgError:
+                print("  Warning: Numerically computed Hessian is singular. Using pseudo-inverse.")
+            hess_inv_approx = np.linalg.pinv(hess_matrix)
         
         one_step_update = np.dot(hess_inv_approx, grad_approx)
         theta_new = initial_estimator - one_step_update
@@ -301,5 +354,5 @@ class ParameterEstimator:
         for i in range(num_params): # 更新後の値を境界内にクリップ
             theta_new[i] = np.clip(theta_new[i], processed_bounds[i][0], processed_bounds[i][1])
 
-        print(f"  One-Step updated parameters: {theta_new}")
+
         return theta_new
