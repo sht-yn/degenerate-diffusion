@@ -1,6 +1,6 @@
 # %%
 import sympy as sp
-from sympy import symbols, tensorproduct, log, det, Matrix
+from sympy import symbols, log, det, Matrix
 from sympy.tensor.array import derive_by_array
 from einsum_sympy import einsum_sympy
 from dataclasses import dataclass
