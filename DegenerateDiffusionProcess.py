@@ -1,19 +1,13 @@
 # %%
-import sympy as sp
-from sympy import symbols, log, det, Matrix
-from sympy.tensor.array import derive_by_array
-from einsum_sympy import einsum_sympy
-from dataclasses import dataclass
-from sympy.utilities.lambdify import lambdify
-import numpy as np
-import sympy as sp
-from sympy import Array, symbols, factorial, tensorproduct, log, det, Matrix
-from sympy.tensor.array import derive_by_array
-# from einsum_sympy import einsum_sympy # 元のコードにはあったが、このコードでは未使用のためコメントアウトしても良い
-from dataclasses import dataclass
-from sympy.utilities.lambdify import lambdify
-import numpy as np
-from typing import Tuple, Optional, Sequence # 型ヒント用に追加
+from project_imports import (
+    sp,  # sympy as sp
+    symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+    derive_by_array,
+    lambdify,
+    np,   # numpy as np
+    dataclass,
+    Tuple, Optional, Sequence # typing から
+)
 # %%
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess:

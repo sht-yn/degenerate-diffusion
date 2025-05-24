@@ -18,6 +18,14 @@ power = np.power
 isfinite = np.isfinite
 nan = np.nan
 
+# --- Matplotlib ---
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import Normalize
+from matplotlib.ticker import MaxNLocator
+from matplotlib import ticker
+from matplotlib import rcParams
+
 # --- Typing (型ヒント) ---
 from typing import Dict, Callable, Tuple, Any, Optional, List, TYPE_CHECKING, Sequence # <--- Sequence を追加
 
