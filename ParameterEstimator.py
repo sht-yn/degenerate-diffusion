@@ -189,7 +189,7 @@ class ParameterEstimator:
                     idata = pm.sample(
                         draws=draws, tune=tune, chains=chains, cores=cores, step = pm.Metropolis(),
                         initvals=initvals_list if initvals_list else None,
-                        progressbar= False
+                        progressbar= True
                     )
                     # print("MCMC sampling completed.")
                     if idata is not None and num_params > 0:
