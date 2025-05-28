@@ -153,7 +153,7 @@ class DegenerateDiffusionProcess:
         y_series = y_all[start_index::step_stride]
 
         return x_series, y_series
-
+#%%
 # --- 以下、使用例（元のコードにはなかったので参考として） ---
 if __name__ == '__main__':
     # 例: 1次元 Ornstein-Uhlenbeck process (dx = -theta2*x dt + theta1 dW)
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     H_STEP = 0.1 # 間引き後のステップ幅
     BURN_OUT = 100.0
     DT_SIM = 0.01 # シミュレーション内部のステップ幅
-
+#%%
     print("Simulating...")
     x_data, y_data = process.simulate(
         true_theta=true_thetas,
