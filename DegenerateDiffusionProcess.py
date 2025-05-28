@@ -8,6 +8,15 @@ from project_imports import (
     dataclass,
     Tuple, Optional, Sequence # typing から
 )
+# jax関連のライブラリを全てインポート
+import jax
+from jax import numpy as jnp
+
+from typing import Tuple, Optional, Sequence
+from dataclasses import dataclass
+
+from functools import partial
+
 # %%
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess:
@@ -52,11 +61,11 @@ class DegenerateDiffusionProcess:
         common_args = (self.x, self.y)
         try:
             object.__setattr__(self, "A_func",
-                               lambdify((*common_args, self.theta_2), self.A, modules="numpy"))
+                               lambdify((*common_args, self.theta_2), self.A, modules="jax"))
             object.__setattr__(self, "B_func",
-                               lambdify((*common_args, self.theta_1), self.B, modules="numpy"))
+                               lambdify((*common_args, self.theta_1), self.B, modules="jax"))
             object.__setattr__(self, "H_func",
-                               lambdify((*common_args, self.theta_3), self.H, modules="numpy"))
+                               lambdify((*common_args, self.theta_3), self.H, modules="jax"))
 
         except Exception as e:
             print(f"Error during lambdification in __post_init__: {e}")
