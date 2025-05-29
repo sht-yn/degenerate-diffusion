@@ -1,0 +1,815 @@
+DegenerateDiffusionProcess.py:2:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+ 1 |   # %%
+ 2 | / from project_imports import (
+ 3 | |     sp,  # sympy as sp
+ 4 | |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+ 5 | |     derive_by_array,
+ 6 | |     lambdify,
+ 7 | |     np,   # numpy as np
+ 8 | |     dataclass,
+ 9 | |     Tuple, Optional, Sequence # typing から
+10 | | )
+11 | | # jax関連のライブラリを全てインポート
+12 | | import jax
+13 | | from jax import numpy as jnp
+14 | |
+15 | | from typing import Tuple, Optional, Sequence
+16 | | from dataclasses import dataclass
+17 | |
+18 | | from functools import partial
+   | |_____________________________^ I001
+19 |
+20 |   # %%
+   |
+   = help: Organize imports
+
+DegenerateDiffusionProcess.py:4:14: F401 [*] `project_imports.log` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |              ^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:4:19: F401 [*] `project_imports.det` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |                   ^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:4:24: F401 [*] `project_imports.Matrix` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |                        ^^^^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:4:32: F401 [*] `project_imports.Array` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |                                ^^^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:4:39: F401 [*] `project_imports.factorial` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |                                       ^^^^^^^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:4:50: F401 [*] `project_imports.tensorproduct` imported but unused
+  |
+2 | from project_imports import (
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+  |                                                  ^^^^^^^^^^^^^ F401
+5 |     derive_by_array,
+6 |     lambdify,
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:5:5: F401 [*] `project_imports.derive_by_array` imported but unused
+  |
+3 |     sp,  # sympy as sp
+4 |     symbols, log, det, Matrix, Array, factorial, tensorproduct, # 個別の sympy 要素
+5 |     derive_by_array,
+  |     ^^^^^^^^^^^^^^^ F401
+6 |     lambdify,
+7 |     np,   # numpy as np
+  |
+  = help: Remove unused import
+
+DegenerateDiffusionProcess.py:12:8: F401 [*] `jax` imported but unused
+   |
+10 | )
+11 | # jax関連のライブラリを全てインポート
+12 | import jax
+   |        ^^^ F401
+13 | from jax import numpy as jnp
+   |
+   = help: Remove unused import: `jax`
+
+DegenerateDiffusionProcess.py:13:26: F401 [*] `jax.numpy` imported but unused
+   |
+11 | # jax関連のライブラリを全てインポート
+12 | import jax
+13 | from jax import numpy as jnp
+   |                          ^^^ F401
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   |
+   = help: Remove unused import: `jax.numpy`
+
+DegenerateDiffusionProcess.py:15:1: UP035 [*] Import from `collections.abc` instead: `Sequence`
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP035
+16 | from dataclasses import dataclass
+   |
+   = help: Import from `collections.abc`
+
+DegenerateDiffusionProcess.py:15:1: UP035 `typing.Tuple` is deprecated, use `tuple` instead
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP035
+16 | from dataclasses import dataclass
+   |
+
+DegenerateDiffusionProcess.py:15:20: F811 Redefinition of unused `Tuple` from line 9
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   |                    ^^^^^ F811
+16 | from dataclasses import dataclass
+   |
+   = help: Remove definition: `Tuple`
+
+DegenerateDiffusionProcess.py:15:27: F811 Redefinition of unused `Optional` from line 9
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   |                           ^^^^^^^^ F811
+16 | from dataclasses import dataclass
+   |
+   = help: Remove definition: `Optional`
+
+DegenerateDiffusionProcess.py:15:37: F811 Redefinition of unused `Sequence` from line 9
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   |                                     ^^^^^^^^ F811
+16 | from dataclasses import dataclass
+   |
+   = help: Remove definition: `Sequence`
+
+DegenerateDiffusionProcess.py:15:37: F401 [*] `typing.Sequence` imported but unused
+   |
+13 | from jax import numpy as jnp
+14 |
+15 | from typing import Tuple, Optional, Sequence
+   |                                     ^^^^^^^^ F401
+16 | from dataclasses import dataclass
+   |
+   = help: Remove unused import: `typing.Sequence`
+
+DegenerateDiffusionProcess.py:16:25: F811 Redefinition of unused `dataclass` from line 8
+   |
+15 | from typing import Tuple, Optional, Sequence
+16 | from dataclasses import dataclass
+   |                         ^^^^^^^^^ F811
+17 |
+18 | from functools import partial
+   |
+   = help: Remove definition: `dataclass`
+
+DegenerateDiffusionProcess.py:18:23: F401 [*] `functools.partial` imported but unused
+   |
+16 | from dataclasses import dataclass
+17 |
+18 | from functools import partial
+   |                       ^^^^^^^ F401
+19 |
+20 | # %%
+   |
+   = help: Remove unused import: `functools.partial`
+
+DegenerateDiffusionProcess.py:23:5: D212 [*] Multi-line docstring summary should start at the first line
+   |
+21 |   @dataclass(frozen=True)
+22 |   class DegenerateDiffusionProcess:
+23 | /     """
+24 | |     多次元の拡散過程と観測過程を扱うためのクラス。
+25 | |
+26 | |     記号計算 (sympy) を用いてモデルを定義し、
+27 | |     数値計算 (numpy) のための関数を lambdify で生成する。
+28 | |
+29 | |     Attributes:
+30 | |         x (sp.Array): 状態変数 (sympyシンボル配列, shape=(d_x,))
+31 | |         y (sp.Array): 観測変数 (sympyシンボル配列, shape=(d_y,))
+32 | |         theta_1 (sp.Array): パラメータ1 (sympyシンボル配列)
+33 | |         theta_2 (sp.Array): パラメータ2 (sympyシンボル配列)
+34 | |         theta_3 (sp.Array): パラメータ3 (sympyシンボル配列)
+35 | |         A (sp.Array): ドリフト項の x 成分 (sympy式配列, shape=(d_x,))
+36 | |         B (sp.Array): 拡散項 (sympy式配列, shape=(d_x, r))
+37 | |         H (sp.Array): 観測過程のドリフト項 (sympy式配列, shape=(d_y,))
+38 | |         # --- 以下は __post_init__ で自動生成 ---
+39 | |         A_func : ドリフト A を計算する numpy 関数
+40 | |         B_func : 拡散項 B を計算する numpy 関数
+41 | |         H_func : 観測ドリフト H を計算する numpy 関数
+42 | |     """
+   | |_______^ D212
+43 |
+44 |       x: sp.Array
+   |
+   = help: Remove whitespace after opening quotes
+
+DegenerateDiffusionProcess.py:23:5: D400 First line should end with a period
+   |
+21 |   @dataclass(frozen=True)
+22 |   class DegenerateDiffusionProcess:
+23 | /     """
+24 | |     多次元の拡散過程と観測過程を扱うためのクラス。
+25 | |
+26 | |     記号計算 (sympy) を用いてモデルを定義し、
+27 | |     数値計算 (numpy) のための関数を lambdify で生成する。
+28 | |
+29 | |     Attributes:
+30 | |         x (sp.Array): 状態変数 (sympyシンボル配列, shape=(d_x,))
+31 | |         y (sp.Array): 観測変数 (sympyシンボル配列, shape=(d_y,))
+32 | |         theta_1 (sp.Array): パラメータ1 (sympyシンボル配列)
+33 | |         theta_2 (sp.Array): パラメータ2 (sympyシンボル配列)
+34 | |         theta_3 (sp.Array): パラメータ3 (sympyシンボル配列)
+35 | |         A (sp.Array): ドリフト項の x 成分 (sympy式配列, shape=(d_x,))
+36 | |         B (sp.Array): 拡散項 (sympy式配列, shape=(d_x, r))
+37 | |         H (sp.Array): 観測過程のドリフト項 (sympy式配列, shape=(d_y,))
+38 | |         # --- 以下は __post_init__ で自動生成 ---
+39 | |         A_func : ドリフト A を計算する numpy 関数
+40 | |         B_func : 拡散項 B を計算する numpy 関数
+41 | |         H_func : 観測ドリフト H を計算する numpy 関数
+42 | |     """
+   | |_______^ D400
+43 |
+44 |       x: sp.Array
+   |
+   = help: Add period
+
+DegenerateDiffusionProcess.py:23:5: D415 First line should end with a period, question mark, or exclamation point
+   |
+21 |   @dataclass(frozen=True)
+22 |   class DegenerateDiffusionProcess:
+23 | /     """
+24 | |     多次元の拡散過程と観測過程を扱うためのクラス。
+25 | |
+26 | |     記号計算 (sympy) を用いてモデルを定義し、
+27 | |     数値計算 (numpy) のための関数を lambdify で生成する。
+28 | |
+29 | |     Attributes:
+30 | |         x (sp.Array): 状態変数 (sympyシンボル配列, shape=(d_x,))
+31 | |         y (sp.Array): 観測変数 (sympyシンボル配列, shape=(d_y,))
+32 | |         theta_1 (sp.Array): パラメータ1 (sympyシンボル配列)
+33 | |         theta_2 (sp.Array): パラメータ2 (sympyシンボル配列)
+34 | |         theta_3 (sp.Array): パラメータ3 (sympyシンボル配列)
+35 | |         A (sp.Array): ドリフト項の x 成分 (sympy式配列, shape=(d_x,))
+36 | |         B (sp.Array): 拡散項 (sympy式配列, shape=(d_x, r))
+37 | |         H (sp.Array): 観測過程のドリフト項 (sympy式配列, shape=(d_y,))
+38 | |         # --- 以下は __post_init__ で自動生成 ---
+39 | |         A_func : ドリフト A を計算する numpy 関数
+40 | |         B_func : 拡散項 B を計算する numpy 関数
+41 | |         H_func : 観測ドリフト H を計算する numpy 関数
+42 | |     """
+   | |_______^ D415
+43 |
+44 |       x: sp.Array
+   |
+   = help: Add closing punctuation
+
+DegenerateDiffusionProcess.py:29:5: D413 [*] Missing blank line after last section ("Attributes")
+   |
+27 |     数値計算 (numpy) のための関数を lambdify で生成する。
+28 |
+29 |     Attributes:
+   |     ^^^^^^^^^^ D413
+30 |         x (sp.Array): 状態変数 (sympyシンボル配列, shape=(d_x,))
+31 |         y (sp.Array): 観測変数 (sympyシンボル配列, shape=(d_y,))
+   |
+   = help: Add blank line after "Attributes"
+
+DegenerateDiffusionProcess.py:53:9: ANN204 Missing return type annotation for special method `__post_init__`
+   |
+51 |     H: sp.Array
+52 |
+53 |     def __post_init__(self):
+   |         ^^^^^^^^^^^^^ ANN204
+54 |         """
+55 |         初期化後の設定処理。
+   |
+   = help: Add return type annotation
+
+DegenerateDiffusionProcess.py:54:9: D202 [*] No blank lines allowed after function docstring (found 1)
+   |
+53 |       def __post_init__(self):
+54 | /         """
+55 | |         初期化後の設定処理。
+56 | |         派生的な属性の計算、lambdifyによる関数生成を行う。
+57 | |         frozen=True のため、属性設定には object.__setattr__ を使用する。
+58 | |         """
+   | |___________^ D202
+59 |
+60 |           # --- lambdify による数値計算用関数の生成 ---
+   |
+   = help: Remove blank line(s) after function docstring
+
+DegenerateDiffusionProcess.py:54:9: D205 1 blank line required between summary line and description
+   |
+53 |       def __post_init__(self):
+54 | /         """
+55 | |         初期化後の設定処理。
+56 | |         派生的な属性の計算、lambdifyによる関数生成を行う。
+57 | |         frozen=True のため、属性設定には object.__setattr__ を使用する。
+58 | |         """
+   | |___________^ D205
+59 |
+60 |           # --- lambdify による数値計算用関数の生成 ---
+   |
+   = help: Insert single blank line
+
+DegenerateDiffusionProcess.py:54:9: D212 [*] Multi-line docstring summary should start at the first line
+   |
+53 |       def __post_init__(self):
+54 | /         """
+55 | |         初期化後の設定処理。
+56 | |         派生的な属性の計算、lambdifyによる関数生成を行う。
+57 | |         frozen=True のため、属性設定には object.__setattr__ を使用する。
+58 | |         """
+   | |___________^ D212
+59 |
+60 |           # --- lambdify による数値計算用関数の生成 ---
+   |
+   = help: Remove whitespace after opening quotes
+
+DegenerateDiffusionProcess.py:54:9: D400 First line should end with a period
+   |
+53 |       def __post_init__(self):
+54 | /         """
+55 | |         初期化後の設定処理。
+56 | |         派生的な属性の計算、lambdifyによる関数生成を行う。
+57 | |         frozen=True のため、属性設定には object.__setattr__ を使用する。
+58 | |         """
+   | |___________^ D400
+59 |
+60 |           # --- lambdify による数値計算用関数の生成 ---
+   |
+   = help: Add period
+
+DegenerateDiffusionProcess.py:54:9: D415 First line should end with a period, question mark, or exclamation point
+   |
+53 |       def __post_init__(self):
+54 | /         """
+55 | |         初期化後の設定処理。
+56 | |         派生的な属性の計算、lambdifyによる関数生成を行う。
+57 | |         frozen=True のため、属性設定には object.__setattr__ を使用する。
+58 | |         """
+   | |___________^ D415
+59 |
+60 |           # --- lambdify による数値計算用関数の生成 ---
+   |
+   = help: Add closing punctuation
+
+DegenerateDiffusionProcess.py:71:13: T201 `print` found
+   |
+70 |         except Exception as e:
+71 |             print(f"Error during lambdification in __post_init__: {e}")
+   |             ^^^^^ T201
+72 |             raise
+   |
+   = help: Remove `print`
+
+DegenerateDiffusionProcess.py:75:9: D417 Missing argument descriptions in the docstring for `simulate`: `burn_out`, `dt`, `h`, `seed`, `t_max`, `true_theta`, `x0`, `y0`
+   |
+74 |     # --- シミュレーション関数 ---
+75 |     def simulate(
+   |         ^^^^^^^^ D417
+76 |         self,
+77 |         true_theta: Tuple[np.ndarray, np.ndarray, np.ndarray], # 型ヒント追加
+   |
+
+DegenerateDiffusionProcess.py:77:21: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+   |
+75 |     def simulate(
+76 |         self,
+77 |         true_theta: Tuple[np.ndarray, np.ndarray, np.ndarray], # 型ヒント追加
+   |                     ^^^^^ UP006
+78 |         t_max: float,
+79 |         h: float,
+   |
+   = help: Replace with `tuple`
+
+DegenerateDiffusionProcess.py:82:13: UP007 [*] Use `X | Y` for type annotations
+   |
+80 |         burn_out: float,
+81 |         seed: int = 42,
+82 |         x0: Optional[np.ndarray] = None, # 型ヒント追加
+   |             ^^^^^^^^^^^^^^^^^^^^ UP007
+83 |         y0: Optional[np.ndarray] = None, # 型ヒント追加
+84 |         dt: float = 0.001,
+   |
+   = help: Convert to `X | Y`
+
+DegenerateDiffusionProcess.py:83:13: UP007 [*] Use `X | Y` for type annotations
+   |
+81 |         seed: int = 42,
+82 |         x0: Optional[np.ndarray] = None, # 型ヒント追加
+83 |         y0: Optional[np.ndarray] = None, # 型ヒント追加
+   |             ^^^^^^^^^^^^^^^^^^^^ UP007
+84 |         dt: float = 0.001,
+85 |     ) -> Tuple[np.ndarray, np.ndarray]: # 返り値の型ヒント追加
+   |
+   = help: Convert to `X | Y`
+
+DegenerateDiffusionProcess.py:85:10: UP006 [*] Use `tuple` instead of `Tuple` for type annotation
+   |
+83 |         y0: Optional[np.ndarray] = None, # 型ヒント追加
+84 |         dt: float = 0.001,
+85 |     ) -> Tuple[np.ndarray, np.ndarray]: # 返り値の型ヒント追加
+   |          ^^^^^ UP006
+86 |         """
+87 |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+   |
+   = help: Replace with `tuple`
+
+DegenerateDiffusionProcess.py:86:9: D212 [*] Multi-line docstring summary should start at the first line
+    |
+ 84 |           dt: float = 0.001,
+ 85 |       ) -> Tuple[np.ndarray, np.ndarray]: # 返り値の型ヒント追加
+ 86 | /         """
+ 87 | |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+ 88 | |
+ 89 | |         Parameters:
+ 90 | |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+ 91 | |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+ 92 | |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+ 93 | |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+ 94 | |             seed (int): 乱数生成器のシード値。
+ 95 | |             x0 (np.ndarray, optional): x の初期値ベクトル。None の場合はゼロベクトル。
+ 96 | |             y0 (np.ndarray, optional): y の初期値ベクトル。None の場合はゼロベクトル。
+ 97 | |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 | |
+ 99 | |         Returns:
+100 | |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 | |                 x_series: x の時系列データ (shape=(T, d_x))
+102 | |                 y_series: y の時系列データ (shape=(T, d_y))
+103 | |                 ここで T は t_max / h に近い整数
+104 | |         """
+    | |___________^ D212
+105 |           np.random.seed(seed)
+106 |           theta_1_val, theta_2_val, theta_3_val = true_theta
+    |
+    = help: Remove whitespace after opening quotes
+
+DegenerateDiffusionProcess.py:86:9: D400 First line should end with a period
+    |
+ 84 |           dt: float = 0.001,
+ 85 |       ) -> Tuple[np.ndarray, np.ndarray]: # 返り値の型ヒント追加
+ 86 | /         """
+ 87 | |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+ 88 | |
+ 89 | |         Parameters:
+ 90 | |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+ 91 | |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+ 92 | |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+ 93 | |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+ 94 | |             seed (int): 乱数生成器のシード値。
+ 95 | |             x0 (np.ndarray, optional): x の初期値ベクトル。None の場合はゼロベクトル。
+ 96 | |             y0 (np.ndarray, optional): y の初期値ベクトル。None の場合はゼロベクトル。
+ 97 | |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 | |
+ 99 | |         Returns:
+100 | |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 | |                 x_series: x の時系列データ (shape=(T, d_x))
+102 | |                 y_series: y の時系列データ (shape=(T, d_y))
+103 | |                 ここで T は t_max / h に近い整数
+104 | |         """
+    | |___________^ D400
+105 |           np.random.seed(seed)
+106 |           theta_1_val, theta_2_val, theta_3_val = true_theta
+    |
+    = help: Add period
+
+DegenerateDiffusionProcess.py:86:9: D415 First line should end with a period, question mark, or exclamation point
+    |
+ 84 |           dt: float = 0.001,
+ 85 |       ) -> Tuple[np.ndarray, np.ndarray]: # 返り値の型ヒント追加
+ 86 | /         """
+ 87 | |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+ 88 | |
+ 89 | |         Parameters:
+ 90 | |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+ 91 | |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+ 92 | |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+ 93 | |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+ 94 | |             seed (int): 乱数生成器のシード値。
+ 95 | |             x0 (np.ndarray, optional): x の初期値ベクトル。None の場合はゼロベクトル。
+ 96 | |             y0 (np.ndarray, optional): y の初期値ベクトル。None の場合はゼロベクトル。
+ 97 | |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 | |
+ 99 | |         Returns:
+100 | |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 | |                 x_series: x の時系列データ (shape=(T, d_x))
+102 | |                 y_series: y の時系列データ (shape=(T, d_y))
+103 | |                 ここで T は t_max / h に近い整数
+104 | |         """
+    | |___________^ D415
+105 |           np.random.seed(seed)
+106 |           theta_1_val, theta_2_val, theta_3_val = true_theta
+    |
+    = help: Add closing punctuation
+
+DegenerateDiffusionProcess.py:89:9: D407 [*] Missing dashed underline after section ("Parameters")
+   |
+87 |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+88 |
+89 |         Parameters:
+   |         ^^^^^^^^^^ D407
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+   |
+   = help: Add dashed line under "Parameters"
+
+DegenerateDiffusionProcess.py:89:9: D406 [*] Section name should end with a newline ("Parameters")
+   |
+87 |         Euler-Maruyama法を用いて状態変数 x と観測変数 y の時系列データを生成する。
+88 |
+89 |         Parameters:
+   |         ^^^^^^^^^^ D406
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+   |
+   = help: Add newline after "Parameters"
+
+DegenerateDiffusionProcess.py:91:42: RUF002 Docstring contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+   |
+89 |         Parameters:
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+   |                                                        ^^ RUF002
+92 |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+93 |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+   |
+
+DegenerateDiffusionProcess.py:91:56: RUF002 Docstring contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+   |
+89 |         Parameters:
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+   |                                                                            ^^ RUF002
+92 |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+93 |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+   |
+
+DegenerateDiffusionProcess.py:92:40: RUF002 Docstring contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+   |
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+92 |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+   |                                                        ^^ RUF002
+93 |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+94 |             seed (int): 乱数生成器のシード値。
+   |
+
+DegenerateDiffusionProcess.py:92:45: RUF002 Docstring contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+   |
+90 |             true_theta (tuple): (theta_1_val, theta_2_val, theta_3_val) の真値。
+91 |             t_max (float): 生成する時系列データの期間長（burn_out期間を除く）。
+92 |             h (float): 生成されるデータの時間ステップ幅（間引き後）。
+   |                                                                  ^^ RUF002
+93 |             burn_out (float): 定常状態に達するまで捨てる初期期間。
+94 |             seed (int): 乱数生成器のシード値。
+   |
+
+DegenerateDiffusionProcess.py:99:9: D413 [*] Missing blank line after last section ("Returns")
+    |
+ 97 |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 |
+ 99 |         Returns:
+    |         ^^^^^^^ D413
+100 |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 |                 x_series: x の時系列データ (shape=(T, d_x))
+    |
+    = help: Add blank line after "Returns"
+
+DegenerateDiffusionProcess.py:99:9: D407 [*] Missing dashed underline after section ("Returns")
+    |
+ 97 |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 |
+ 99 |         Returns:
+    |         ^^^^^^^ D407
+100 |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 |                 x_series: x の時系列データ (shape=(T, d_x))
+    |
+    = help: Add dashed line under "Returns"
+
+DegenerateDiffusionProcess.py:99:9: D406 [*] Section name should end with a newline ("Returns")
+    |
+ 97 |             dt (float): シミュレーション内部の微小時間ステップ幅。
+ 98 |
+ 99 |         Returns:
+    |         ^^^^^^^ D406
+100 |             tuple[np.ndarray, np.ndarray]: (x_series, y_series)
+101 |                 x_series: x の時系列データ (shape=(T, d_x))
+    |
+    = help: Add newline after "Returns"
+
+DegenerateDiffusionProcess.py:114:14: T201 `print` found
+    |
+112 | …     # dt と h の関係チェックと step_stride の計算
+113 | …     if not np.isclose(h % dt, 0, atol=1e-8) and not np.isclose(h % dt, dt, atol=1e-8):
+114 | …          print(f"Warning: h ({h}) may not be an integer multiple of dt ({dt}). Thinning interval might be slightly inaccurate due t…
+    |            ^^^^^ T201
+115 | …     step_stride = max(1, int(np.round(h / dt))) # 丸めて最低1にする
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:114:101: E501 Line too long (148 > 100)
+    |
+112 | …
+113 | …close(h % dt, dt, atol=1e-8):
+114 | …ultiple of dt ({dt}). Thinning interval might be slightly inaccurate due to rounding.")
+    |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E501
+115 | …する
+    |
+
+DegenerateDiffusionProcess.py:130:17: T201 `print` found
+    |
+128 |                 H_val = self.H_func(xt, yt, theta_3_val)
+129 |             except Exception as e:
+130 |                 print(f"Error evaluating A, B, or H function at step {t}: {e}")
+    |                 ^^^^^ T201
+131 |                 print(f"xt={xt}, yt={yt}, theta_1={theta_1_val}, theta_2={theta_2_val}, theta_3={theta_3_val}")
+132 |                 raise
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:131:17: T201 `print` found
+    |
+129 |             except Exception as e:
+130 |                 print(f"Error evaluating A, B, or H function at step {t}: {e}")
+131 |                 print(f"xt={xt}, yt={yt}, theta_1={theta_1_val}, theta_2={theta_2_val}, theta_3={theta_3_val}")
+    |                 ^^^^^ T201
+132 |                 raise
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:131:101: E501 Line too long (111 > 100)
+    |
+129 |             except Exception as e:
+130 |                 print(f"Error evaluating A, B, or H function at step {t}: {e}")
+131 |                 print(f"xt={xt}, yt={yt}, theta_1={theta_1_val}, theta_2={theta_2_val}, theta_3={theta_3_val}")
+    |                                                                                                     ^^^^^^^^^^^ E501
+132 |                 raise
+    |
+
+DegenerateDiffusionProcess.py:139:23: TRY003 Avoid specifying long messages outside the exception class
+    |
+137 |             # 形状チェックをタプル (d_x,) と比較
+138 |             if diffusion_term.shape != (d_x,):
+139 |                 raise ValueError(f"Shape mismatch in diffusion term: expected ({d_x},), got {diffusion_term.shape}")
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ TRY003
+140 |
+141 |             x_all[t + 1] = xt + A_val * dt + diffusion_term
+    |
+
+DegenerateDiffusionProcess.py:139:34: EM102 Exception must not use an f-string literal, assign to variable first
+    |
+137 |             # 形状チェックをタプル (d_x,) と比較
+138 |             if diffusion_term.shape != (d_x,):
+139 |                 raise ValueError(f"Shape mismatch in diffusion term: expected ({d_x},), got {diffusion_term.shape}")
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ EM102
+140 |
+141 |             x_all[t + 1] = xt + A_val * dt + diffusion_term
+    |
+    = help: Assign to variable; remove f-string literal
+
+DegenerateDiffusionProcess.py:139:101: E501 Line too long (116 > 100)
+    |
+137 |             # 形状チェックをタプル (d_x,) と比較
+138 |             if diffusion_term.shape != (d_x,):
+139 |                 raise ValueError(f"Shape mismatch in diffusion term: expected ({d_x},), got {diffusion_term.shape}")
+    |                                                                                                     ^^^^^^^^^^^^^^^^ E501
+140 |
+141 |             x_all[t + 1] = xt + A_val * dt + diffusion_term
+    |
+
+DegenerateDiffusionProcess.py:157:13: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+    |
+155 |         return x_series, y_series
+156 | #%%
+157 | # --- 以下、使用例（元のコードにはなかったので参考として） ---
+    |                   ^^ RUF003
+158 | if __name__ == '__main__':
+159 |     # 例: 1次元 Ornstein-Uhlenbeck process (dx = -theta2*x dt + theta1 dW)
+    |
+
+DegenerateDiffusionProcess.py:157:32: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+    |
+155 |         return x_series, y_series
+156 | #%%
+157 | # --- 以下、使用例（元のコードにはなかったので参考として） ---
+    |                                                         ^^ RUF003
+158 | if __name__ == '__main__':
+159 |     # 例: 1次元 Ornstein-Uhlenbeck process (dx = -theta2*x dt + theta1 dW)
+    |
+
+DegenerateDiffusionProcess.py:193:5: T201 `print` found
+    |
+191 |     DT_SIM = 0.01 # シミュレーション内部のステップ幅
+192 | #%%
+193 |     print("Simulating...")
+    |     ^^^^^ T201
+194 |     x_data, y_data = process.simulate(
+195 |         true_theta=true_thetas,
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:205:5: T201 `print` found
+    |
+203 |     )
+204 |
+205 |     print(f"Simulation finished. Generated data shapes:")
+    |     ^^^^^ T201
+206 |     print(f"x_series shape: {x_data.shape}") # (T, d_x)
+207 |     print(f"y_series shape: {y_data.shape}") # (T, d_y)
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:205:11: F541 [*] f-string without any placeholders
+    |
+203 |     )
+204 |
+205 |     print(f"Simulation finished. Generated data shapes:")
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ F541
+206 |     print(f"x_series shape: {x_data.shape}") # (T, d_x)
+207 |     print(f"y_series shape: {y_data.shape}") # (T, d_y)
+    |
+    = help: Remove extraneous `f` prefix
+
+DegenerateDiffusionProcess.py:206:5: T201 `print` found
+    |
+205 |     print(f"Simulation finished. Generated data shapes:")
+206 |     print(f"x_series shape: {x_data.shape}") # (T, d_x)
+    |     ^^^^^ T201
+207 |     print(f"y_series shape: {y_data.shape}") # (T, d_y)
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:207:5: T201 `print` found
+    |
+205 |     print(f"Simulation finished. Generated data shapes:")
+206 |     print(f"x_series shape: {x_data.shape}") # (T, d_x)
+207 |     print(f"y_series shape: {y_data.shape}") # (T, d_y)
+    |     ^^^^^ T201
+208 |
+209 |     # 簡単なプロット例 (matplotlibが必要)
+    |
+    = help: Remove `print`
+
+DegenerateDiffusionProcess.py:216:20: FBT003 Boolean positional value in function call
+    |
+214 |         ax[0].plot(time, x_data[:, 0], label='x_0 (Simulated)')
+215 |         ax[0].set_ylabel('State x')
+216 |         ax[0].grid(True)
+    |                    ^^^^ FBT003
+217 |         ax[0].legend()
+218 |         ax[1].plot(time, y_data[:, 0], label='y_0 (Simulated)')
+    |
+
+DegenerateDiffusionProcess.py:221:20: FBT003 Boolean positional value in function call
+    |
+219 |         ax[1].set_xlabel('Time')
+220 |         ax[1].set_ylabel('Observation y')
+221 |         ax[1].grid(True)
+    |                    ^^^^ FBT003
+222 |         ax[1].legend()
+223 |         plt.suptitle('Simulated Degenerate Diffusion Process')
+    |
+
+DegenerateDiffusionProcess.py:227:9: T201 `print` found
+    |
+225 |         plt.show()
+226 |     except ImportError:
+227 |         print("\nMatplotlib not found. Skipping plot.")
+    |         ^^^^^ T201
+228 | # %%
+    |
+    = help: Remove `print`
+
+Found 64 errors.
+[*] 28 fixable with the `--fix` option (16 hidden fixes can be enabled with the `--unsafe-fixes` option).

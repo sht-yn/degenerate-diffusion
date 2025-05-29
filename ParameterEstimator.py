@@ -165,7 +165,10 @@ class ParameterEstimator:
                 original_level = pymc_logger.level
                 pymc_logger.setLevel(logging.WARNING)
                 
+
                 try:
+
+                    # 以下はヘルパーにまとめる
                     initvals_list = []
                     if num_params > 0 and chains > 0:
                         for _ in range(chains):
