@@ -130,6 +130,7 @@ class DegenerateDiffusionProcess:
         x0: Optional[np.ndarray] = None,
         y0: Optional[np.ndarray] = None,
         dt: float = 0.001,
+        output_dtype: str = "numpy",  # numpy or jax
     ) -> Tuple[np.ndarray, np.ndarray]:
         if dt <= 0:
             raise ValueError("dt must be positive.")
@@ -168,7 +169,10 @@ class DegenerateDiffusionProcess:
             step_stride_py 
         )
 
-        return np.array(x_series_jax), np.array(y_series_jax)
+        if output_dtype == "jax":
+            return x_series_jax, y_series_jax
+        elif output_dtype == "numpy":
+            return np.array(x_series_jax), np.array(y_series_jax)
 
 #%%
 # --- 以下、使用例（元のコードにはなかったので参考として） ---
@@ -203,16 +207,16 @@ if __name__ == '__main__':
         theta_1=theta1_sym, theta_2=theta2_sym, theta_3=theta3_sym,
         A=A_expr, B=B_expr, H=H_expr
     )
-
+#%%
     true_sigma = np.array([0.5])
     true_kappa = np.array([1.0])
     true_mu_y = np.array([0.2])
     true_thetas = (true_sigma, true_kappa, true_mu_y)
 
-    T_MAX = 1000.0   
+    T_MAX = 100.0   
     H_STEP = 0.1     
     BURN_OUT = 100.0 
-    DT_SIM = 0.01    
+    DT_SIM = 0.001    
 
     #%%
 
@@ -220,8 +224,8 @@ if __name__ == '__main__':
     import time
     start_time = time.time()
     for i in range(10): 
-        current_t_max = T_MAX + i * 10.0 
-        current_h_step = H_STEP + i * 0.01 
+        current_t_max = T_MAX 
+        current_h_step = H_STEP  
         print(f"Running simulation with T_MAX = {current_t_max}, H_STEP = {current_h_step}")
         x_data, y_data = process.simulate(
             true_theta=true_thetas,
@@ -231,7 +235,8 @@ if __name__ == '__main__':
             dt=DT_SIM,
             x0=np.array([0.0]),
             y0=np.array([0.0]),
-            seed=123 + i
+            seed= 1+ i,
+            output_dtype= "numpy"  # "jax" or "numpy"
         )
         print(f"Simulation finished for T_MAX = {current_t_max}, H_STEP = {current_h_step}. Generated data shapes:")
         print(f"x_series shape: {x_data.shape}")
