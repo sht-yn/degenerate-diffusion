@@ -1,6 +1,5 @@
 # Exclude a variety of commonly ignored directories.
 exclude = [
-    "*.ipynb",
     ".bzr",
     ".direnv",
     ".eggs",
@@ -61,6 +60,7 @@ ignore = [
     "N802",
     "PLR0913",
     "ERA001",
+    "T201"
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
