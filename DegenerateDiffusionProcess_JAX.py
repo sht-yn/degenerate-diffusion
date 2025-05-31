@@ -1,5 +1,4 @@
 # %%
-from dataclasses import dataclass
 from functools import partial
 
 # import math # roundは組み込み関数のため不要
@@ -20,7 +19,7 @@ from project_imports import (
 # %%
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess:
-    """多次元の拡散過程と観測過程を扱うためのクラス。
+    """多次元の拡散過程と観測過程を扱うためのクラス。.
 
     記号計算 (sympy) を用いてモデルを定義し、
     数値計算 (numpy/jax) のための関数を lambdify で生成する。
@@ -69,21 +68,21 @@ class DegenerateDiffusionProcess:
         """
         # Calculate total_steps_for_scan as Python int from static args
         _total_steps_for_scan_py_float = (t_max + burn_out) / dt
-        total_steps_for_scan_py = int(round(_total_steps_for_scan_py_float)) # Python int
+        total_steps_for_scan_py = round(_total_steps_for_scan_py_float) # Python int
         total_steps_for_scan_py = max(0, total_steps_for_scan_py) # Ensure non-negative for length
 
 
         # Calculate start_index_py as Python int from static args
         _start_index_py_float = burn_out / dt
-        start_index_py = int(round(_start_index_py_float)) # Python int
+        start_index_py = round(_start_index_py_float) # Python int
 
         # Bound start_index_py using total_steps_for_scan_py (which is also Python int)
         start_index_py = min(start_index_py, total_steps_for_scan_py) # Python min
         start_index_py = max(0, start_index_py) # Python max, ensure non-negative
 
 
-        d_x = self.x.shape[0]
-        d_y = self.y.shape[0]
+        self.x.shape[0]
+        self.y.shape[0]
         r = self.B.shape[1]
 
         def em_step(carry, _):
@@ -129,19 +128,23 @@ class DegenerateDiffusionProcess:
         output_dtype: str = "numpy",  # numpy or jax
     ) -> tuple[np.ndarray, np.ndarray]:
         if dt <= 0:
-            raise ValueError("dt must be positive.")
+            msg = "dt must be positive."
+            raise ValueError(msg)
         if h <= 0:
-            raise ValueError("h must be positive.")
+            msg = "h must be positive."
+            raise ValueError(msg)
         if t_max < 0:
-            raise ValueError("t_max must be non-negative.")
+            msg = "t_max must be non-negative."
+            raise ValueError(msg)
         if burn_out < 0:
-            raise ValueError("burn_out must be non-negative.")
+            msg = "burn_out must be non-negative."
+            raise ValueError(msg)
 
         if not np.isclose(h % dt, 0, atol=1e-8) and not np.isclose(h % dt, dt, atol=1e-8):
             print(f"Warning: h ({h}) is not an integer multiple of dt ({dt}). Thinning interval might be slightly inaccurate due to rounding.")
 
         step_stride_float_py = h / dt
-        step_stride_py = max(1, int(round(step_stride_float_py))) # Use built-in round()
+        step_stride_py = max(1, round(step_stride_float_py)) # Use built-in round()
 
 
         key = jax.random.PRNGKey(seed)
@@ -169,24 +172,10 @@ class DegenerateDiffusionProcess:
             return x_series_jax, y_series_jax
         if output_dtype == "numpy":
             return np.array(x_series_jax), np.array(y_series_jax)
+        return None
 
 #%%
-# --- 以下、使用例（元のコードにはなかったので参考として） ---
 if __name__ == '__main__':
-    # project_imports.py の仮の内容 (ユーザーの環境に合わせてください)
-    # このファイルが存在しない場合、AttributeError: module 'project_imports' has no attribute 'sp' などが発生します。
-    # sympyと関連シンボルをインポートするために、以下のような内容を project_imports.py に記述するか、
-    # 直接このファイルにインポート文を記述してください。
-    #
-    # --- project_imports.py の例 ---
-    # import sympy as sp
-    # from sympy import symbols, log, det, Matrix, Array, factorial, tensorproduct
-    # from sympy.tensor.array import derive_by_array
-    # from sympy import lambdify
-    # import numpy as np
-    # from dataclasses import dataclass
-    # from typing import Tuple, Optional, Sequence
-    # --- ここまで project_imports.py の例 ---
 
     x_sym = sp.Array([symbols('x_0')])
     y_sym = sp.Array([symbols('y_0')])
