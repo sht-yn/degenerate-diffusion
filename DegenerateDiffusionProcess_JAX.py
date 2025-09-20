@@ -4,16 +4,13 @@ from functools import partial
 # import math # roundは組み込み関数のため不要
 # jax関連のライブラリを全てインポート
 import jax
+import numpy as np
+import sympy as sp
 from jax import lax  # For jax.lax.scan
 from jax import numpy as jnp
-
-from project_imports import (
-    dataclass,
-    lambdify,
-    np,  # numpy as np
-    sp,  # sympy as sp
-    symbols,
-)
+from sympy import lambdify, symbols
+#dataclassをインポート
+from dataclasses import dataclass
 
 
 # %%
@@ -37,29 +34,32 @@ class DegenerateDiffusionProcess:
     def __post_init__(self):
         common_args = (self.x, self.y)
         try:
-            object.__setattr__(self, "A_func",
-                                lambdify((*common_args, self.theta_2), self.A, modules="jax"))
-            object.__setattr__(self, "B_func",
-                                lambdify((*common_args, self.theta_1), self.B, modules="jax"))
-            object.__setattr__(self, "H_func",
-                                lambdify((*common_args, self.theta_3), self.H, modules="jax"))
+            object.__setattr__(
+                self, "A_func", lambdify((*common_args, self.theta_2), self.A, modules="jax")
+            )
+            object.__setattr__(
+                self, "B_func", lambdify((*common_args, self.theta_1), self.B, modules="jax")
+            )
+            object.__setattr__(
+                self, "H_func", lambdify((*common_args, self.theta_3), self.H, modules="jax")
+            )
         except Exception as e:
             print(f"Error during lambdification in __post_init__: {e}")
             raise
 
     @partial(jax.jit, static_argnums=(0, 5, 6, 7, 10, 11))
     def _simulate_jax_core(
-        self,                     # 0: static
-        theta_1_val: jnp.ndarray, # 1
-        theta_2_val: jnp.ndarray, # 2
-        theta_3_val: jnp.ndarray, # 3
+        self,  # 0: static
+        theta_1_val: jnp.ndarray,  # 1
+        theta_2_val: jnp.ndarray,  # 2
+        theta_3_val: jnp.ndarray,  # 3
         key: jax.random.PRNGKey,  # 4
-        t_max: float,             # 5: static
-        h: float,                 # 6: static
-        burn_out: float,          # 7: static
-        x0_val: jnp.ndarray,      # 8
-        y0_val: jnp.ndarray,      # 9
-        dt: float,                # 10: static
+        t_max: float,  # 5: static
+        h: float,  # 6: static
+        burn_out: float,  # 7: static
+        x0_val: jnp.ndarray,  # 8
+        y0_val: jnp.ndarray,  # 9
+        dt: float,  # 10: static
         step_stride_static: int,  # 11: static
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """JAX-optimized core simulation loop using Euler-Maruyama.
@@ -68,18 +68,16 @@ class DegenerateDiffusionProcess:
         """
         # Calculate total_steps_for_scan as Python int from static args
         _total_steps_for_scan_py_float = (t_max + burn_out) / dt
-        total_steps_for_scan_py = round(_total_steps_for_scan_py_float) # Python int
-        total_steps_for_scan_py = max(0, total_steps_for_scan_py) # Ensure non-negative for length
-
+        total_steps_for_scan_py = round(_total_steps_for_scan_py_float)  # Python int
+        total_steps_for_scan_py = max(0, total_steps_for_scan_py)  # Ensure non-negative for length
 
         # Calculate start_index_py as Python int from static args
         _start_index_py_float = burn_out / dt
-        start_index_py = round(_start_index_py_float) # Python int
+        start_index_py = round(_start_index_py_float)  # Python int
 
         # Bound start_index_py using total_steps_for_scan_py (which is also Python int)
-        start_index_py = min(start_index_py, total_steps_for_scan_py) # Python min
-        start_index_py = max(0, start_index_py) # Python max, ensure non-negative
-
+        start_index_py = min(start_index_py, total_steps_for_scan_py)  # Python min
+        start_index_py = max(0, start_index_py)  # Python max, ensure non-negative
 
         self.x.shape[0]
         self.y.shape[0]
@@ -104,7 +102,9 @@ class DegenerateDiffusionProcess:
         initial_carry = (x0_val, y0_val, key)
 
         # lax.scan uses the Python int total_steps_for_scan_py for its length
-        final_carry, (x_results, y_results) = lax.scan(em_step, initial_carry, None, length=total_steps_for_scan_py)
+        final_carry, (x_results, y_results) = lax.scan(
+            em_step, initial_carry, None, length=total_steps_for_scan_py
+        )
 
         x_all = jnp.concatenate((jnp.expand_dims(x0_val, 0), x_results), axis=0)
         y_all = jnp.concatenate((jnp.expand_dims(y0_val, 0), y_results), axis=0)
@@ -141,18 +141,21 @@ class DegenerateDiffusionProcess:
             raise ValueError(msg)
 
         if not np.isclose(h % dt, 0, atol=1e-8) and not np.isclose(h % dt, dt, atol=1e-8):
-            print(f"Warning: h ({h}) is not an integer multiple of dt ({dt}). Thinning interval might be slightly inaccurate due to rounding.")
+            print(
+                f"Warning: h ({h}) is not an integer multiple of dt ({dt}). Thinning interval might be slightly inaccurate due to rounding."
+            )
 
         step_stride_float_py = h / dt
-        step_stride_py = max(1, round(step_stride_float_py)) # Use built-in round()
-
+        step_stride_py = max(1, round(step_stride_float_py))  # Use built-in round()
 
         key = jax.random.PRNGKey(seed)
 
         d_x = self.x.shape[0]
         d_y = self.y.shape[0]
 
-        theta_1_jnp, theta_2_jnp, theta_3_jnp = [jnp.asarray(th, dtype=jnp.float32) for th in true_theta]
+        theta_1_jnp, theta_2_jnp, theta_3_jnp = [
+            jnp.asarray(th, dtype=jnp.float32) for th in true_theta
+        ]
 
         _x0_np = np.zeros(d_x, dtype=np.float32) if x0 is None else np.asarray(x0, dtype=np.float32)
         _y0_np = np.zeros(d_y, dtype=np.float32) if y0 is None else np.asarray(y0, dtype=np.float32)
@@ -161,11 +164,17 @@ class DegenerateDiffusionProcess:
         y0_jnp = jnp.reshape(_y0_np, (d_y,))
 
         x_series_jax, y_series_jax = self._simulate_jax_core(
-            theta_1_jnp, theta_2_jnp, theta_3_jnp,
+            theta_1_jnp,
+            theta_2_jnp,
+            theta_3_jnp,
             key,
-            t_max, h, burn_out,
-            x0_jnp, y0_jnp, dt,
-            step_stride_py
+            t_max,
+            h,
+            burn_out,
+            x0_jnp,
+            y0_jnp,
+            dt,
+            step_stride_py,
         )
 
         if output_dtype == "jax":
@@ -174,25 +183,30 @@ class DegenerateDiffusionProcess:
             return np.array(x_series_jax), np.array(y_series_jax)
         return None
 
-#%%
-if __name__ == '__main__':
 
-    x_sym = sp.Array([symbols('x_0')])
-    y_sym = sp.Array([symbols('y_0')])
-    theta1_sym = sp.Array([symbols('sigma')])
-    theta2_sym = sp.Array([symbols('kappa')])
-    theta3_sym = sp.Array([symbols('mu_y')])
+# %%
+if __name__ == "__main__":
+    x_sym = sp.Array([symbols("x_0")])
+    y_sym = sp.Array([symbols("y_0")])
+    theta1_sym = sp.Array([symbols("sigma")])
+    theta2_sym = sp.Array([symbols("kappa")])
+    theta3_sym = sp.Array([symbols("mu_y")])
 
     A_expr = sp.Array([-theta2_sym[0] * x_sym[0]])
     B_expr = sp.Array([[theta1_sym[0]]])
     H_expr = sp.Array([theta3_sym[0] * x_sym[0]])
 
     process = DegenerateDiffusionProcess(
-        x=x_sym, y=y_sym,
-        theta_1=theta1_sym, theta_2=theta2_sym, theta_3=theta3_sym,
-        A=A_expr, B=B_expr, H=H_expr
+        x=x_sym,
+        y=y_sym,
+        theta_1=theta1_sym,
+        theta_2=theta2_sym,
+        theta_3=theta3_sym,
+        A=A_expr,
+        B=B_expr,
+        H=H_expr,
     )
-#%%
+    # %%
     true_sigma = np.array([0.5])
     true_kappa = np.array([1.0])
     true_mu_y = np.array([0.2])
@@ -203,10 +217,11 @@ if __name__ == '__main__':
     BURN_OUT = 100.0
     DT_SIM = 0.001
 
-    #%%
+    # %%
 
     print("Simulating with JAX-optimized method...")
     import time
+
     start_time = time.time()
     for i in range(10):
         current_t_max = T_MAX
@@ -220,32 +235,37 @@ if __name__ == '__main__':
             dt=DT_SIM,
             x0=np.array([0.0]),
             y0=np.array([0.0]),
-            seed= 1+ i,
-            output_dtype= "numpy"  # "jax" or "numpy"
+            seed=1 + i,
+            output_dtype="numpy",  # "jax" or "numpy"
         )
-        print(f"Simulation finished for T_MAX = {current_t_max}, H_STEP = {current_h_step}. Generated data shapes:")
+        print(
+            f"Simulation finished for T_MAX = {current_t_max}, H_STEP = {current_h_step}. Generated data shapes:"
+        )
         print(f"x_series shape: {x_data.shape}")
         print(f"y_series shape: {y_data.shape}")
 
         if i == 0:
             try:
                 import matplotlib.pyplot as plt
+
                 time_axis = np.arange(x_data.shape[0]) * current_h_step
 
                 fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
 
-                ax[0].plot(time_axis, x_data[:, 0], label=f'{x_sym[0]!s} (Simulated)')
-                ax[0].set_ylabel(f'State {x_sym[0]!s}')
+                ax[0].plot(time_axis, x_data[:, 0], label=f"{x_sym[0]!s} (Simulated)")
+                ax[0].set_ylabel(f"State {x_sym[0]!s}")
                 ax[0].grid(True)
                 ax[0].legend()
 
-                ax[1].plot(time_axis, y_data[:, 0], label=f'{y_sym[0]!s} (Simulated)')
-                ax[1].set_xlabel('Time')
-                ax[1].set_ylabel(f'Observation {y_sym[0]!s}')
+                ax[1].plot(time_axis, y_data[:, 0], label=f"{y_sym[0]!s} (Simulated)")
+                ax[1].set_xlabel("Time")
+                ax[1].set_ylabel(f"Observation {y_sym[0]!s}")
                 ax[1].grid(True)
                 ax[1].legend()
 
-                plt.suptitle(f'Simulated Degenerate Diffusion Process (JAX Optimized, T_MAX={current_t_max}, H_STEP={current_h_step})')
+                plt.suptitle(
+                    f"Simulated Degenerate Diffusion Process (JAX Optimized, T_MAX={current_t_max}, H_STEP={current_h_step})"
+                )
                 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
                 plt.show()
             except ImportError:

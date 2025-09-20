@@ -1,13 +1,11 @@
 # %%
 # Standard library imports
 import warnings
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 # Third-party imports (numpy and sympy are loaded via project_imports)
-
 # Local application/library specific imports
-from project_imports import ( # Assuming this provides sp, symbols, lambdify, np
+from project_imports import (  # Assuming this provides sp, symbols, lambdify, np
     lambdify,
     np,
     sp,
@@ -19,6 +17,7 @@ from project_imports import ( # Assuming this provides sp, symbols, lambdify, np
 # Original code also imported typing.Tuple, Optional, Sequence and dataclasses.dataclass
 # directly or via project_imports, which are now handled by modern typing syntax
 # and direct import of dataclass.
+
 
 # %%
 @dataclass(frozen=True)
@@ -40,6 +39,7 @@ class DegenerateDiffusionProcess:
         A_func: NumPy function to calculate drift A (auto-generated).
         B_func: NumPy function to calculate diffusion term B (auto-generated).
         H_func: NumPy function to calculate observation drift H (auto-generated).
+
     """
 
     x: sp.Array
@@ -60,13 +60,16 @@ class DegenerateDiffusionProcess:
         # --- Generate numerical functions using lambdify ---
         common_args = (self.x, self.y)
         try:
-            object.__setattr__(self, "A_func",
-                               lambdify((*common_args, self.theta_2), self.A, modules="jax"))
-            object.__setattr__(self, "B_func",
-                               lambdify((*common_args, self.theta_1), self.B, modules="jax"))
-            object.__setattr__(self, "H_func",
-                               lambdify((*common_args, self.theta_3), self.H, modules="jax"))
-        except Exception as e:
+            object.__setattr__(
+                self, "A_func", lambdify((*common_args, self.theta_2), self.A, modules="jax")
+            )
+            object.__setattr__(
+                self, "B_func", lambdify((*common_args, self.theta_1), self.B, modules="jax")
+            )
+            object.__setattr__(
+                self, "H_func", lambdify((*common_args, self.theta_3), self.H, modules="jax")
+            )
+        except Exception:
             # Consider logging the error instead of printing if this were a library
             # For a script, print might be acceptable, but Ruff advises against it.
             # Error will propagate due to the raise statement.
@@ -113,6 +116,7 @@ class DegenerateDiffusionProcess:
             x_series: Time series data for x (shape=(T, d_x)).
             y_series: Time series data for y (shape=(T, d_y)).
             Where T is an integer close to t_max / h.
+
         """
         np.random.seed(seed)
         theta_1_val, theta_2_val, theta_3_val = true_theta
@@ -122,12 +126,12 @@ class DegenerateDiffusionProcess:
         r = self.B.shape[1]  # Number of Wiener processes
 
         # Check dt and h relationship and calculate step_stride
-        if not np.isclose(h % dt, 0, atol=1e-8) and \
-           not np.isclose(h % dt, dt, atol=1e-8):
+        if not np.isclose(h % dt, 0, atol=1e-8) and not np.isclose(h % dt, dt, atol=1e-8):
             warnings.warn(
                 f"Warning: h ({h}) may not be an integer multiple of dt ({dt}). "
                 "Thinning interval might be slightly inaccurate due to rounding.",
-                UserWarning
+                UserWarning,
+                stacklevel=2,
             )
         step_stride = max(1, int(np.round(h / dt)))
 
@@ -142,7 +146,7 @@ class DegenerateDiffusionProcess:
                 A_val = self.A_func(xt, yt, theta_2_val)
                 B_val = self.B_func(xt, yt, theta_1_val)
                 H_val = self.H_func(xt, yt, theta_3_val)
-            except Exception as e:
+            except Exception:
                 # Error will propagate. Original prints for debugging are removed.
                 # Consider logging detailed info if needed:
                 # error_msg = (
@@ -179,18 +183,19 @@ class DegenerateDiffusionProcess:
 
         return x_series, y_series
 
-#%%
+
+# %%
 # --- Example usage (illustrative) ---
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example: 1D Ornstein-Uhlenbeck process (dx = -theta2*x dt + theta1 dW)
     # Observation y has x-dependent drift (dy = theta3*x dt)
 
     # Symbolic definitions
-    x_sym = sp.Array([symbols('x_0')])
-    y_sym = sp.Array([symbols('y_0')]) # Observation variable, can be empty if not used by A or B
-    theta1_sym = sp.Array([symbols('sigma')])  # diffusion coefficient
-    theta2_sym = sp.Array([symbols('kappa')])  # reversion rate
-    theta3_sym = sp.Array([symbols('mu')])     # observation drift coefficient
+    x_sym = sp.Array([symbols("x_0")])
+    y_sym = sp.Array([symbols("y_0")])  # Observation variable, can be empty if not used by A or B
+    theta1_sym = sp.Array([symbols("sigma")])  # diffusion coefficient
+    theta2_sym = sp.Array([symbols("kappa")])  # reversion rate
+    theta3_sym = sp.Array([symbols("mu")])  # observation drift coefficient
 
     # Model definition
     A_expr = sp.Array([-theta2_sym[0] * x_sym[0]])
@@ -199,23 +204,28 @@ if __name__ == '__main__':
 
     # Instance creation
     process = DegenerateDiffusionProcess(
-        x=x_sym, y=y_sym,
-        theta_1=theta1_sym, theta_2=theta2_sym, theta_3=theta3_sym,
-        A=A_expr, B=B_expr, H=H_expr
+        x=x_sym,
+        y=y_sym,
+        theta_1=theta1_sym,
+        theta_2=theta2_sym,
+        theta_3=theta3_sym,
+        A=A_expr,
+        B=B_expr,
+        H=H_expr,
     )
 
     # True parameter values
     true_sigma = np.array([0.5])
     true_kappa = np.array([1.0])
-    true_mu = np.array([0.2]) # Changed example for H to depend on x
+    true_mu = np.array([0.2])  # Changed example for H to depend on x
     true_thetas = (true_sigma, true_kappa, true_mu)
 
     # Simulation parameters
     T_MAX = 1000.0
-    H_STEP = 0.1     # Thinned step width
+    H_STEP = 0.1  # Thinned step width
     BURN_OUT = 100.0
-    DT_SIM = 0.01    # Internal simulation step width
-#%%
+    DT_SIM = 0.01  # Internal simulation step width
+    # %%
     print("Simulating...")
     x_data, y_data = process.simulate(
         true_theta=true_thetas,
@@ -224,33 +234,34 @@ if __name__ == '__main__':
         burn_out=BURN_OUT,
         dt=DT_SIM,
         x0=np.array([0.0]),
-        y0=np.array([0.0]), # Initial y value
-        seed=123
+        y0=np.array([0.0]),  # Initial y value
+        seed=123,
     )
 
-    print("Simulation finished. Generated data shapes:") # F541: removed f from f""
+    print("Simulation finished. Generated data shapes:")  # F541: removed f from f""
     print(f"x_series shape: {x_data.shape}")  # (T, d_x)
     print(f"y_series shape: {y_data.shape}")  # (T, d_y)
 
     # Simple plotting example (requires matplotlib)
     try:
         import matplotlib.pyplot as plt
+
         time = np.arange(x_data.shape[0]) * H_STEP
         fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
 
-        ax[0].plot(time, x_data[:, 0], label='x_0 (Simulated)')
-        ax[0].set_ylabel('State x')
-        ax[0].grid(visible=True) # FBT003: Use keyword argument
+        ax[0].plot(time, x_data[:, 0], label="x_0 (Simulated)")
+        ax[0].set_ylabel("State x")
+        ax[0].grid(visible=True)  # FBT003: Use keyword argument
         ax[0].legend()
 
-        ax[1].plot(time, y_data[:, 0], label='y_0 (Simulated)')
-        ax[1].set_xlabel('Time')
-        ax[1].set_ylabel('Observation y')
-        ax[1].grid(visible=True) # FBT003: Use keyword argument
+        ax[1].plot(time, y_data[:, 0], label="y_0 (Simulated)")
+        ax[1].set_xlabel("Time")
+        ax[1].set_ylabel("Observation y")
+        ax[1].grid(visible=True)  # FBT003: Use keyword argument
         ax[1].legend()
 
-        plt.suptitle('Simulated Degenerate Diffusion Process')
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust for suptitle
+        plt.suptitle("Simulated Degenerate Diffusion Process")
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust for suptitle
         plt.show()
     except ImportError:
         print("\nMatplotlib not found. Skipping plot.")

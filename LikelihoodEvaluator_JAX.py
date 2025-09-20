@@ -1,10 +1,10 @@
 # %%
+from typing import TYPE_CHECKING
+
 import jax.numpy as jnp  # JAX NumPyをインポート
 
 # DegenerateDiffusionProcess_JAX は提供されたコードスニペットに含まれるため、
 # そのJAX対応バージョンを想定しています。
-from DegenerateDiffusionProcess_JAX import DegenerateDiffusionProcess
-
 # from jax import jit # JAXのjitはここでは直接使用しないが、呼び出し側で適用可能
 from einsum_sympy import einsum_sympy
 from project_imports import (
@@ -31,16 +31,21 @@ from project_imports import (
 )
 from project_imports import zeros as sp_zeros
 
+if TYPE_CHECKING:
+    from DegenerateDiffusionProcess_JAX import DegenerateDiffusionProcess
+
 # --- 定数 ---
 INVALID_SREPR_KEY = "invalid_sympy_srepr"
+
+
 # %%
 class LikelihoodEvaluator:
     """DegenerateDiffusionProcess モデルに基づき疑似尤度を計算するクラス。
-    主要な記号的数式も属性として保持する。
+    主要な記号的数式も属性として保持する。.
     """
 
-    def __init__(self, model: 'DegenerateDiffusionProcess'):
-        """LikelihoodEvaluator のインスタンスを初期化"""
+    def __init__(self, model: "DegenerateDiffusionProcess") -> None:
+        """LikelihoodEvaluator のインスタンスを初期化."""
         self.model = model
         self._L_cache: Dict[Tuple[int, str], Array] = {}
         self._L0_func_cache: Dict[Tuple[int, str], Callable] = {}
@@ -58,10 +63,18 @@ class LikelihoodEvaluator:
 
         # --- モデルから lambdify 済み関数を取得 ---
         # これらは DegenerateDiffusionProcess クラスで modules="jax" で lambdify されていることを期待
-        required_funcs = ['A_func', 'B_func', 'H_func']
-        if not all(hasattr(model, func_name) and callable(getattr(model, func_name)) for func_name in required_funcs):
-            missing = [f for f in required_funcs if not hasattr(model, f) or not callable(getattr(model, f))]
-            raise AttributeError(f"Provided model instance is missing required callable JAX functions: {missing}")
+        required_funcs = ["A_func", "B_func", "H_func"]
+        if not all(
+            hasattr(model, func_name) and callable(getattr(model, func_name))
+            for func_name in required_funcs
+        ):
+            missing = [
+                f
+                for f in required_funcs
+                if not hasattr(model, f) or not callable(getattr(model, f))
+            ]
+            msg = f"Provided model instance is missing required callable JAX functions: {missing}"
+            raise AttributeError(msg)
         self.A_func = model.A_func
         self.B_func = model.B_func
         self.H_func = model.H_func
@@ -78,72 +91,109 @@ class LikelihoodEvaluator:
             self.log_det_C_expr = None
             try:
                 self.inv_C_expr = Array(C_matrix.inv())
-                self.inv_C_func = lambdify((*common_args, self.theta_1), self.inv_C_expr, modules="jax")
+                self.inv_C_func = lambdify(
+                    (*common_args, self.theta_1), self.inv_C_expr, modules="jax"
+                )
             except NonInvertibleMatrixError:
-                print("Warning: Symbolic matrix C is not invertible. inv_C_expr and inv_C_func set to None.")
+                print(
+                    "Warning: Symbolic matrix C is not invertible. inv_C_expr and inv_C_func set to None."
+                )
                 self.inv_C_func = None
             except Exception as e:
-                print(f"Warning: Error inverting C matrix or lambdifying: {e}. inv_C_expr and inv_C_func set to None.")
+                print(
+                    f"Warning: Error inverting C matrix or lambdifying: {e}. inv_C_expr and inv_C_func set to None."
+                )
                 self.inv_C_func = None
 
             try:
                 det_C_val = C_matrix.det()
-                if det_C_val.is_nonpositive: # type: ignore
-                    print("Warning: Symbolic det(C) is non-positive. log_det_C_expr and log_det_C_func set to None.")
+                if det_C_val.is_nonpositive:  # type: ignore
+                    print(
+                        "Warning: Symbolic det(C) is non-positive. log_det_C_expr and log_det_C_func set to None."
+                    )
                     self.log_det_C_func = None
                 elif det_C_val == 0:
-                    print("Warning: Symbolic det(C) is zero. log_det_C_expr set to -oo (func to None).")
+                    print(
+                        "Warning: Symbolic det(C) is zero. log_det_C_expr set to -oo (func to None)."
+                    )
                     self.log_det_C_expr = -oo
                     self.log_det_C_func = None
                 else:
                     self.log_det_C_expr = log(det_C_val)
-                    self.log_det_C_func = lambdify((*common_args, self.theta_1), self.log_det_C_expr, modules="jax")
+                    self.log_det_C_func = lambdify(
+                        (*common_args, self.theta_1), self.log_det_C_expr, modules="jax"
+                    )
             except Exception as e:
-                print(f"Warning: Could not reliably determine sign of det(C) or log failed ({e}). log_det_C_expr and log_det_C_func set to None.")
+                print(
+                    f"Warning: Could not reliably determine sign of det(C) or log failed ({e}). log_det_C_expr and log_det_C_func set to None."
+                )
                 self.log_det_C_func = None
 
             self.partial_x_H_sym = derive_by_array(self.H, self.x)
             # self.partial_x_H_func = lambdify((*common_args, self.theta_3), self.partial_x_H_sym, modules="jax") # 必要に応じて
 
-            self.V_sym = einsum_sympy("ki,kl,lj->ij", self.partial_x_H_sym, self.C_sym, self.partial_x_H_sym)
-            self.V_func = lambdify((*common_args, self.theta_1, self.theta_3), self.V_sym, modules="jax")
+            self.V_sym = einsum_sympy(
+                "ki,kl,lj->ij", self.partial_x_H_sym, self.C_sym, self.partial_x_H_sym
+            )
+            self.V_func = lambdify(
+                (*common_args, self.theta_1, self.theta_3), self.V_sym, modules="jax"
+            )
 
             V_matrix = Matrix(self.V_sym)
             self.inv_V_expr = None
             self.log_det_V_expr = None
             try:
                 self.inv_V_expr = Array(V_matrix.inv())
-                self.inv_V_func = lambdify((*common_args, self.theta_1, self.theta_3), self.inv_V_expr, modules="jax")
+                self.inv_V_func = lambdify(
+                    (*common_args, self.theta_1, self.theta_3), self.inv_V_expr, modules="jax"
+                )
             except NonInvertibleMatrixError:
-                print("Warning: Symbolic matrix V is not invertible. inv_V_expr and inv_V_func set to None.")
+                print(
+                    "Warning: Symbolic matrix V is not invertible. inv_V_expr and inv_V_func set to None."
+                )
                 self.inv_V_func = None
             except Exception as e:
-                print(f"Warning: Error inverting V matrix or lambdifying: {e}. inv_V_expr and inv_V_func set to None.")
+                print(
+                    f"Warning: Error inverting V matrix or lambdifying: {e}. inv_V_expr and inv_V_func set to None."
+                )
                 self.inv_V_func = None
 
             try:
                 det_V_val = V_matrix.det()
-                if det_V_val.is_nonpositive: # type: ignore
-                    print("Warning: Symbolic det(V) is non-positive. log_det_V_expr and log_det_V_func set to None.")
+                if det_V_val.is_nonpositive:  # type: ignore
+                    print(
+                        "Warning: Symbolic det(V) is non-positive. log_det_V_expr and log_det_V_func set to None."
+                    )
                     self.log_det_V_func = None
                 elif det_V_val == 0:
-                    print("Warning: Symbolic det(V) is zero. log_det_V_expr set to -oo (func to None).")
+                    print(
+                        "Warning: Symbolic det(V) is zero. log_det_V_expr set to -oo (func to None)."
+                    )
                     self.log_det_V_expr = -oo
                     self.log_det_V_func = None
                 else:
                     self.log_det_V_expr = log(det_V_val)
-                    self.log_det_V_func = lambdify((*common_args, self.theta_1, self.theta_3), self.log_det_V_expr, modules="jax")
+                    self.log_det_V_func = lambdify(
+                        (*common_args, self.theta_1, self.theta_3),
+                        self.log_det_V_expr,
+                        modules="jax",
+                    )
             except Exception as e:
-                print(f"Warning: Could not reliably determine sign of det(V) or log failed ({e}). log_det_V_expr and log_det_V_func set to None.")
+                print(
+                    f"Warning: Could not reliably determine sign of det(V) or log failed ({e}). log_det_V_expr and log_det_V_func set to None."
+                )
                 self.log_det_V_func = None
 
             self.partial_x_H_transpose_inv_V_expr = None
             if self.inv_V_expr is not None:
                 try:
-                    self.partial_x_H_transpose_inv_V_expr = einsum_sympy("ji,jk->ik", self.partial_x_H_sym, self.inv_V_expr)
+                    self.partial_x_H_transpose_inv_V_expr = einsum_sympy(
+                        "ji,jk->ik", self.partial_x_H_sym, self.inv_V_expr
+                    )
                     self.partial_x_H_transpose_inv_V_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.partial_x_H_transpose_inv_V_expr, modules="jax"
+                        self.partial_x_H_transpose_inv_V_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating partial_x_H_transpose_inv_V_expr or func: {e}")
@@ -157,13 +207,20 @@ class LikelihoodEvaluator:
             self.inv_S0_yy_expr = None
             self.log_det_S0_expr = None
 
-            if self.inv_C_expr is not None and self.inv_V_expr is not None and self.partial_x_H_transpose_inv_V_expr is not None:
+            if (
+                self.inv_C_expr is not None
+                and self.inv_V_expr is not None
+                and self.partial_x_H_transpose_inv_V_expr is not None
+            ):
                 try:
-                    term_for_invS0xx = einsum_sympy('ik,kj->ij', self.partial_x_H_transpose_inv_V_expr, self.partial_x_H_sym)
+                    term_for_invS0xx = einsum_sympy(
+                        "ik,kj->ij", self.partial_x_H_transpose_inv_V_expr, self.partial_x_H_sym
+                    )
                     self.inv_S0_xx_expr = self.inv_C_expr + 3 * term_for_invS0xx
                     self.inv_S0_xx_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.inv_S0_xx_expr, modules="jax"
+                        self.inv_S0_xx_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating inv_S0_xx_expr or func: {e}")
@@ -173,17 +230,21 @@ class LikelihoodEvaluator:
                     self.inv_S0_xy_expr = -6 * self.partial_x_H_transpose_inv_V_expr
                     self.inv_S0_xy_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.inv_S0_xy_expr, modules="jax"
+                        self.inv_S0_xy_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating inv_S0_xy_expr or func: {e}")
                     self.inv_S0_xy_func = None
 
                 try:
-                    self.inv_S0_yx_expr = -6 * einsum_sympy('ik,kj->ij', self.inv_V_expr, self.partial_x_H_sym)
+                    self.inv_S0_yx_expr = -6 * einsum_sympy(
+                        "ik,kj->ij", self.inv_V_expr, self.partial_x_H_sym
+                    )
                     self.inv_S0_yx_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.inv_S0_yx_expr, modules="jax"
+                        self.inv_S0_yx_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating inv_S0_yx_expr or func: {e}")
@@ -193,38 +254,50 @@ class LikelihoodEvaluator:
                     self.inv_S0_yy_expr = 12 * self.inv_V_expr
                     self.inv_S0_yy_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.inv_S0_yy_expr, modules="jax"
+                        self.inv_S0_yy_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating inv_S0_yy_expr or func: {e}")
                     self.inv_S0_yy_func = None
             else:
-                print("Warning: Could not create inv_S0_xx, inv_S0_xy, inv_S0_yx, inv_S0_yy expressions/functions due to previous errors with C_inv, V_inv or dHdx_T_V_inv.")
+                print(
+                    "Warning: Could not create inv_S0_xx, inv_S0_xy, inv_S0_yx, inv_S0_yy expressions/functions due to previous errors with C_inv, V_inv or dHdx_T_V_inv."
+                )
                 self.inv_S0_xx_func = None
                 self.inv_S0_xy_func = None
                 self.inv_S0_yx_func = None
                 self.inv_S0_yy_func = None
 
-            if self.log_det_C_expr is not None and self.log_det_V_expr is not None and \
-               self.log_det_C_expr != -oo and self.log_det_V_expr != -oo : # type: ignore
+            if (
+                self.log_det_C_expr is not None
+                and self.log_det_V_expr is not None
+                and self.log_det_C_expr != -oo
+                and self.log_det_V_expr != -oo
+            ):  # type: ignore
                 try:
                     # d_y = self.y.shape[0] # Not used in the simplified log_det_S0 expr in the original code
                     self.log_det_S0_expr = self.log_det_C_expr + self.log_det_V_expr
                     self.log_det_S0_func = lambdify(
                         (*common_args, self.theta_1, self.theta_3),
-                        self.log_det_S0_expr, modules="jax"
+                        self.log_det_S0_expr,
+                        modules="jax",
                     )
                 except Exception as e:
                     print(f"Error creating log_det_S0_expr or func: {e}")
                     self.log_det_S0_func = None
             else:
-                print("Warning: Could not create log_det_S0_expr or func due to issues with log_det_C or log_det_V.")
-                if self.log_det_C_expr == -oo or self.log_det_V_expr == -oo: # type: ignore
-                     self.log_det_S0_expr = -oo # type: ignore
+                print(
+                    "Warning: Could not create log_det_S0_expr or func due to issues with log_det_C or log_det_V."
+                )
+                if self.log_det_C_expr == -oo or self.log_det_V_expr == -oo:  # type: ignore
+                    self.log_det_S0_expr = -oo  # type: ignore
                 self.log_det_S0_func = None
 
         except Exception as e:
-            print(f"CRITICAL Error during symbolic calc/lambdify in LikelihoodEvaluator __init__: {e}")
+            print(
+                f"CRITICAL Error during symbolic calc/lambdify in LikelihoodEvaluator __init__: {e}"
+            )
             self.C_func = None
             self.inv_C_func = None
             self.log_det_C_func = None
@@ -252,7 +325,7 @@ class LikelihoodEvaluator:
     # --- Infinitesimal Generator L (変更なし) ---
     def _L_elem_once(self, f_elem: Basic) -> Basic:
         if not isinstance(f_elem, Expr) or f_elem.is_constant(simplify=False):
-            return S(0) # sympy.S
+            return S(0)  # sympy.S
         try:
             f_elem_sym = sp.sympify(f_elem)
             df_dx = derive_by_array(f_elem_sym, self.x)
@@ -263,11 +336,12 @@ class LikelihoodEvaluator:
 
             term1 = einsum_sympy("i,i->", self.A, df_dx)
             term2 = einsum_sympy("i,i->", self.H, df_dy)
-            term3 = (S(1) / 2) * einsum_sympy("ij,ij->", C_term_sym, d2f_dx2) # sympy.S
-            result = term1 + term2 + term3
-            return result
+            term3 = (S(1) / 2) * einsum_sympy("ij,ij->", C_term_sym, d2f_dx2)  # sympy.S
+            return term1 + term2 + term3
         except Exception:
-            print(f"Error applying _L_elem_once to: {type(f_elem)} with srepr: {self._get_tensor_srepr(f_elem)}")
+            print(
+                f"Error applying _L_elem_once to: {type(f_elem)} with srepr: {self._get_tensor_srepr(f_elem)}"
+            )
             raise
 
     def L(self, f_tensor: Basic, k: int) -> Basic:
@@ -278,39 +352,44 @@ class LikelihoodEvaluator:
         if k == 0:
             result = f_tensor
         elif k < 0:
-            raise ValueError("Order k must be non-negative")
+            msg = "Order k must be non-negative"
+            raise ValueError(msg)
         else:
             f_prev = self.L(f_tensor, k - 1)
             try:
-                if isinstance(f_prev, Array) and hasattr(f_prev, 'applyfunc'):
+                if isinstance(f_prev, Array) and hasattr(f_prev, "applyfunc"):
                     result = f_prev.applyfunc(self._L_elem_once)
                 elif isinstance(f_prev, (Expr, Basic)):
                     result = self._L_elem_once(f_prev)
                 else:
                     print(f"Warning: Applying L to non-symbolic {type(f_prev)} in L(k={k}).")
-                    result = sp_zeros(*f_prev.shape) if hasattr(f_prev, 'shape') else S(0) # sympy.zeros, sympy.S
+                    result = (
+                        sp_zeros(*f_prev.shape) if hasattr(f_prev, "shape") else S(0)
+                    )  # sympy.zeros, sympy.S
             except Exception:
                 print(f"Error in L applying L once for k={k}")
-                print(f"L^{k-1}(f): {type(f_prev)}, srepr: {self._get_tensor_srepr(f_prev)}")
+                print(f"L^{k - 1}(f): {type(f_prev)}, srepr: {self._get_tensor_srepr(f_prev)}")
                 raise
         self._L_cache[cache_key] = result
         return result
 
     def L_0(self, f_tensor: Basic, k: int) -> Basic:
         if k < 0:
-            raise ValueError("k must be non-negative")
+            msg = "k must be non-negative"
+            raise ValueError(msg)
         Lk_f = self.L(f_tensor, k)
-        fact_k = factorial(k) # sympy.factorial
+        fact_k = factorial(k)  # sympy.factorial
         if fact_k == 0:
-             raise ValueError(f"Factorial({k}) is zero? This should not happen.")
+            msg = f"Factorial({k}) is zero? This should not happen."
+            raise ValueError(msg)
 
         try:
-            if isinstance(Lk_f, Array) and hasattr(Lk_f, 'applyfunc'):
-                result = Lk_f.applyfunc(lambda elem: elem / S(fact_k)) # sympy.S
+            if isinstance(Lk_f, Array) and hasattr(Lk_f, "applyfunc"):
+                result = Lk_f.applyfunc(lambda elem: elem / S(fact_k))  # sympy.S
             elif isinstance(Lk_f, (Expr, Basic)):
-                result = Lk_f / S(fact_k) # sympy.S
+                result = Lk_f / S(fact_k)  # sympy.S
             else:
-                result = Lk_f / float(fact_k) # Fallback for non-sympy types
+                result = Lk_f / float(fact_k)  # Fallback for non-sympy types
         except Exception:
             print(f"Error in L_0 dividing by factorial({k})")
             print(f"Lk_f type: {type(Lk_f)}, srepr: {self._get_tensor_srepr(Lk_f)}")
@@ -323,23 +402,30 @@ class LikelihoodEvaluator:
             return self._L0_func_cache[cache_key]
         try:
             L0_expr_val = self.L_0(f_tensor, k)
-            lambdify_args = (self.x, self.y,
-                             self.theta_1, self.theta_2, self.theta_3)
+            lambdify_args = (self.x, self.y, self.theta_1, self.theta_2, self.theta_3)
 
-            func = lambdify(lambdify_args, L0_expr_val, modules="jax") # Changed to JAX
+            func = lambdify(lambdify_args, L0_expr_val, modules="jax")  # Changed to JAX
             self._L0_func_cache[cache_key] = func
             return func
         except Exception:
             print(f"Error creating L_0_func for k={k}, srepr={cache_key[1]}")
-            print(f"Expression was: {L0_expr_val if 'L0_expr_val' in locals() else 'undefined'}") # type: ignore
+            print(f"Expression was: {L0_expr_val if 'L0_expr_val' in locals() else 'undefined'}")  # type: ignore
             raise
 
     # --- Auxiliary functions for Quasi-Likelihood (JAXへ変更) ---
-    def Dx_func(self, L0_x_funcs: Dict[int, Callable],
-                x_j: jnp.ndarray, x_j_1: jnp.ndarray, y_j_1: jnp.ndarray,
-                theta_2_val: jnp.ndarray,
-                theta_1_bar: jnp.ndarray, theta_2_bar: jnp.ndarray, theta_3_bar: jnp.ndarray,
-                h: float, k_arg: int) -> jnp.ndarray:
+    def Dx_func(
+        self,
+        L0_x_funcs: Dict[int, Callable],
+        x_j: jnp.ndarray,
+        x_j_1: jnp.ndarray,
+        y_j_1: jnp.ndarray,
+        theta_2_val: jnp.ndarray,
+        theta_1_bar: jnp.ndarray,
+        theta_2_bar: jnp.ndarray,
+        theta_3_bar: jnp.ndarray,
+        h: float,
+        k_arg: int,
+    ) -> jnp.ndarray:
         if h <= 0:
             return jnp.zeros_like(x_j, dtype=x_j.dtype)
         DX_SCALE = jnp.power(h, -0.5)
@@ -350,7 +436,8 @@ class LikelihoodEvaluator:
             try:
                 A_val = self.A_func(x_j_1, y_j_1, theta_2_val)
             except Exception as e:
-                raise RuntimeError(f"Dx_func: A_func eval error: {e}") from e
+                msg = f"Dx_func: A_func eval error: {e}"
+                raise RuntimeError(msg) from e
             D_x -= DX_SCALE * jnp.power(h, 1.0) * A_val
 
         if k_arg >= 2:
@@ -360,17 +447,27 @@ class LikelihoodEvaluator:
                 try:
                     L0_x_m_val = L0_x_funcs[m_loop](*args_for_L0_bar)
                 except KeyError as e:
-                    raise RuntimeError(f"Dx_func: L0_x_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_x_funcs.keys()) if L0_x_funcs else 'empty'}). k_arg was {k_arg}.") from e
+                    msg = f"Dx_func: L0_x_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_x_funcs.keys()) if L0_x_funcs else 'empty'}). k_arg was {k_arg}."
+                    raise RuntimeError(msg) from e
                 except Exception as e:
-                    raise RuntimeError(f"Dx_func: L0_x_funcs[{m_loop}] eval error: {e}") from e
+                    msg = f"Dx_func: L0_x_funcs[{m_loop}] eval error: {e}"
+                    raise RuntimeError(msg) from e
                 D_x -= DX_SCALE * h_pow_m * L0_x_m_val
         return D_x
 
-    def Dy_func(self, L0_y_funcs: Dict[int, Callable],
-                y_j: jnp.ndarray, y_j_1: jnp.ndarray, x_j_1: jnp.ndarray,
-                theta_3_val: jnp.ndarray,
-                theta_1_bar: jnp.ndarray, theta_2_bar: jnp.ndarray, theta_3_bar: jnp.ndarray,
-                h: float, k_arg: int) -> jnp.ndarray:
+    def Dy_func(
+        self,
+        L0_y_funcs: Dict[int, Callable],
+        y_j: jnp.ndarray,
+        y_j_1: jnp.ndarray,
+        x_j_1: jnp.ndarray,
+        theta_3_val: jnp.ndarray,
+        theta_1_bar: jnp.ndarray,
+        theta_2_bar: jnp.ndarray,
+        theta_3_bar: jnp.ndarray,
+        h: float,
+        k_arg: int,
+    ) -> jnp.ndarray:
         if h <= 0:
             return jnp.zeros_like(y_j, dtype=y_j.dtype)
         DY_SCALE = jnp.power(h, -1.5)
@@ -381,7 +478,8 @@ class LikelihoodEvaluator:
             try:
                 H_val = self.H_func(x_j_1, y_j_1, theta_3_val)
             except Exception as e:
-                raise RuntimeError(f"Dy_func: H_func eval error: {e}") from e
+                msg = f"Dy_func: H_func eval error: {e}"
+                raise RuntimeError(msg) from e
             D_y -= DY_SCALE * jnp.power(h, 1.0) * H_val
 
         if k_arg >= 2:
@@ -391,9 +489,11 @@ class LikelihoodEvaluator:
                 try:
                     L0_y_m_val = L0_y_funcs[m_loop](*args_for_L0_bar)
                 except KeyError as e:
-                    raise RuntimeError(f"Dy_func: L0_y_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_y_funcs.keys()) if L0_y_funcs else 'empty'}). k_arg was {k_arg}.") from e
+                    msg = f"Dy_func: L0_y_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_y_funcs.keys()) if L0_y_funcs else 'empty'}). k_arg was {k_arg}."
+                    raise RuntimeError(msg) from e
                 except Exception as e:
-                    raise RuntimeError(f"Dy_func: L0_y_funcs[{m_loop}] eval error: {e}") from e
+                    msg = f"Dy_func: L0_y_funcs[{m_loop}] eval error: {e}"
+                    raise RuntimeError(msg) from e
                 D_y -= DY_SCALE * h_pow_m * L0_y_m_val
         return D_y
 
@@ -409,12 +509,14 @@ class LikelihoodEvaluator:
 
         def compute_U_component(f1: Array, f2: Array, total_sum_order: int) -> Array:
             if not (isinstance(f1, Array) and f1.rank() == 1):
-                raise ValueError(f"U computation requires rank-1 Array for f1, got {type(f1)}")
+                msg = f"U computation requires rank-1 Array for f1, got {type(f1)}"
+                raise ValueError(msg)
             if not (isinstance(f2, Array) and f2.rank() == 1):
-                raise ValueError(f"U computation requires rank-1 Array for f2, got {type(f2)}")
+                msg = f"U computation requires rank-1 Array for f2, got {type(f2)}"
+                raise ValueError(msg)
 
             u_shape = (f1.shape[0], f2.shape[0])
-            U_component = Array(sp_zeros(*u_shape)) # sympy.zeros
+            U_component = Array(sp_zeros(*u_shape))  # sympy.zeros
 
             for m1 in range(total_sum_order + 1):
                 m2 = total_sum_order - m1
@@ -426,20 +528,28 @@ class LikelihoodEvaluator:
 
                     # Original code used np.prod. Since this is symbolic, explicit product.
                     term_elements = 1
-                    for s_val in term.shape: term_elements *= int(s_val) # Ensure python int for product
+                    for s_val in term.shape:
+                        term_elements *= int(s_val)  # Ensure python int for product
                     u_elements = 1
-                    for s_val in u_shape: u_elements *= int(s_val) # Ensure python int for product
+                    for s_val in u_shape:
+                        u_elements *= int(s_val)  # Ensure python int for product
 
                     if term.shape != u_shape:
                         if term_elements == u_elements:
-                            print(f"Warning: compute_U_component term shape mismatch ({term.shape} vs {u_shape}). Reshaping.")
+                            print(
+                                f"Warning: compute_U_component term shape mismatch ({term.shape} vs {u_shape}). Reshaping."
+                            )
                             term = Array(term).reshape(*u_shape)
                         else:
-                            raise ValueError(f"compute_U_component term shape mismatch ({term.shape} vs {u_shape}) and cannot reshape.")
+                            msg = f"compute_U_component term shape mismatch ({term.shape} vs {u_shape}) and cannot reshape."
+                            raise ValueError(msg)
 
                     U_component = U_component + term
                 except Exception as e:
-                    raise RuntimeError(f"Error in compute_U_component for f1={f1}, f2={f2}, m1={m1}, m2={m2}: {e}") from e
+                    msg = (
+                        f"Error in compute_U_component for f1={f1}, f2={f2}, m1={m1}, m2={m2}: {e}"
+                    )
+                    raise RuntimeError(msg) from e
             return Array(U_component)
 
         U_xx = compute_U_component(x_sym, x_sym, k + 1)
@@ -453,7 +563,8 @@ class LikelihoodEvaluator:
             S_yx = Array(T_yx) - Array(U_yx)
             S_yy = Array(T_yy) - Array(U_yy)
         except Exception as e:
-            raise RuntimeError(f"Error subtracting U from T for S(k={k}): {e}. Types: T_xx={type(T_xx)}, U_xx={type(U_xx)}") from e
+            msg = f"Error subtracting U from T for S(k={k}): {e}. Types: T_xx={type(T_xx)}, U_xx={type(U_xx)}"
+            raise RuntimeError(msg) from e
 
         return S_xx, S_xy, S_yx, S_yy
 
@@ -462,9 +573,9 @@ class LikelihoodEvaluator:
         if cache_key in self._S_func_cache:
             return self._S_func_cache[cache_key]
         try:
-            S_k_tuple = self.S(k) # Renamed S_k to S_k_tuple to avoid confusion with k
+            S_k_tuple = self.S(k)  # Renamed S_k to S_k_tuple to avoid confusion with k
             S_xx_expr, S_xy_expr, S_yx_expr, S_yy_expr = S_k_tuple
-            lambdify_args = (self.x, self.y,self.theta_1, self.theta_2, self.theta_3)
+            lambdify_args = (self.x, self.y, self.theta_1, self.theta_2, self.theta_3)
             f_xx = lambdify(lambdify_args, S_xx_expr, modules="jax")
             f_xy = lambdify(lambdify_args, S_xy_expr, modules="jax")
             f_yx = lambdify(lambdify_args, S_yx_expr, modules="jax")
@@ -478,30 +589,39 @@ class LikelihoodEvaluator:
             raise
 
     # --- Quasi-Likelihood Evaluator Factories (JAXへ変更) ---
-    def make_quasi_likelihood_v1_prime_evaluator(self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int) -> Callable:
-        x_series_jnp = jnp.asarray(x_series) # Ensure JAX array
-        y_series_jnp = jnp.asarray(y_series) # Ensure JAX array
+    def make_quasi_likelihood_v1_prime_evaluator(
+        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+    ) -> Callable:
+        x_series_jnp = jnp.asarray(x_series)  # Ensure JAX array
+        y_series_jnp = jnp.asarray(y_series)  # Ensure JAX array
 
         n = x_series_jnp.shape[0]
-        d_x = self.x.shape[0] # Sympy shape, used for jnp.zeros dimension
+        d_x = self.x.shape[0]  # Sympy shape, used for jnp.zeros dimension
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            raise ValueError("Time series length must be > 1 and shapes must match for V1'.")
+            msg = "Time series length must be > 1 and shapes must match for V1'."
+            raise ValueError(msg)
 
         try:
             L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k)}
             S_l_funcs = {l_s: self.S_func(l_s) for l_s in range(1, k)}
         except Exception as e:
-            raise RuntimeError(f"V1' precalculation error: {e}") from e
+            msg = f"V1' precalculation error: {e}"
+            raise RuntimeError(msg) from e
 
         if self.inv_C_func is None or self.log_det_C_func is None:
-            raise RuntimeError("inv_C_func or log_det_C_func is missing for V1'. Check __init__ warnings.")
+            msg = "inv_C_func or log_det_C_func is missing for V1'. Check __init__ warnings."
+            raise RuntimeError(msg)
 
-        def evaluate_v1_prime(theta_1_val: jnp.ndarray,
-                              theta_1_bar: jnp.ndarray,
-                              theta_2_bar: jnp.ndarray,
-                              theta_3_bar: jnp.ndarray) -> float:
-            total_log_likelihood = jnp.array(0.0, dtype=jnp.float32) # Use jnp.array for accumulation
+        def evaluate_v1_prime(
+            theta_1_val: jnp.ndarray,
+            theta_1_bar: jnp.ndarray,
+            theta_2_bar: jnp.ndarray,
+            theta_3_bar: jnp.ndarray,
+        ) -> float:
+            total_log_likelihood = jnp.array(
+                0.0, dtype=jnp.float32
+            )  # Use jnp.array for accumulation
 
             theta_1_val_j = jnp.asarray(theta_1_val, dtype=jnp.float32)
             theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
@@ -520,10 +640,18 @@ class LikelihoodEvaluator:
                     return jnp.nan
                 try:
                     Dx_k_param = k - 1
-                    Dx_val = self.Dx_func(L0_x_funcs, x_j, x_j_1, y_j_1,
-                                          theta_2_bar_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dx_k_param)
+                    Dx_val = self.Dx_func(
+                        L0_x_funcs,
+                        x_j,
+                        x_j_1,
+                        y_j_1,
+                        theta_2_bar_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dx_k_param,
+                    )
                 except Exception as e:
                     print(f"Error during Dx_func evaluation at step j={j_idx}: {e}")
                     return jnp.nan
@@ -531,7 +659,9 @@ class LikelihoodEvaluator:
                     sum_Sxx_val = jnp.zeros((d_x, d_x), dtype=jnp.float32)
                     for l_s_loop in range(1, k):
                         Sxx_func_l = S_l_funcs[l_s_loop][0]
-                        Sxx_l_val = Sxx_func_l(x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                        Sxx_l_val = Sxx_func_l(
+                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        )
                         sum_Sxx_val += jnp.power(h, float(l_s_loop)) * Sxx_l_val
                 except Exception as e:
                     print(f"Error during Sxx_func evaluation at step j={j_idx}: {e}")
@@ -544,49 +674,80 @@ class LikelihoodEvaluator:
                     step_likelihood = term1_quad + term2_trace + term3_logdet
                     if not jnp.isfinite(step_likelihood):
                         print(f"Warning: V1' eval at j={j_idx} is non-finite: {step_likelihood}")
-                        print(f"  T1_quad={term1_quad}, T2_trace={term2_trace}, T3_logdet={term3_logdet}")
-                        print(f"  invC={invC_val}, Dx={Dx_val}, sumSxx={sum_Sxx_val}, logDetC={logDetC_val}")
+                        print(
+                            f"  T1_quad={term1_quad}, T2_trace={term2_trace}, T3_logdet={term3_logdet}"
+                        )
+                        print(
+                            f"  invC={invC_val}, Dx={Dx_val}, sumSxx={sum_Sxx_val}, logDetC={logDetC_val}"
+                        )
                         return jnp.nan
                     total_log_likelihood += step_likelihood
                 except Exception as e:
                     print(f"Error during V1' evaluation at step j={j_idx}: {e}")
-                    print(f"  Inputs: x_j1={x_j_1}, y_j1={y_j_1}, th1_val={theta_1_val_j}, th_bars=...")
+                    print(
+                        f"  Inputs: x_j1={x_j_1}, y_j1={y_j_1}, th1_val={theta_1_val_j}, th_bars=..."
+                    )
                     return jnp.nan
-            return float(total_log_likelihood / (2.0 * num_transitions)) if num_transitions > 0 else float(jnp.nan)
+            return (
+                float(total_log_likelihood / (2.0 * num_transitions))
+                if num_transitions > 0
+                else float(jnp.nan)
+            )
 
-    def make_quasi_likelihood_v1_evaluator(self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int) -> Callable:
+    def make_quasi_likelihood_v1_evaluator(
+        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+    ) -> Callable:
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
 
         n = x_series_jnp.shape[0]
-        d_x = self.x.shape[0] # Sympy shape
-        d_y = self.y.shape[0] # Sympy shape
+        d_x = self.x.shape[0]  # Sympy shape
+        d_y = self.y.shape[0]  # Sympy shape
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            raise ValueError("Time series length must be > 1 and shapes must match for V1.")
+            msg = "Time series length must be > 1 and shapes must match for V1."
+            raise ValueError(msg)
 
         try:
             L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k)}
             L0_y_funcs = {m: self.L_0_func(self.y, m) for m in range(k + 1)}
             S_l_funcs = {l_s: self.S_func(l_s) for l_s in range(1, k)}
         except Exception as e:
-            raise RuntimeError(f"V1 precalculation error: {e}") from e
+            msg = f"V1 precalculation error: {e}"
+            raise RuntimeError(msg) from e
 
-        s0_funcs_needed = [self.inv_S0_xx_func, self.inv_S0_xy_func,
-                           self.inv_S0_yx_func, self.inv_S0_yy_func, self.log_det_S0_func]
+        s0_funcs_needed = [
+            self.inv_S0_xx_func,
+            self.inv_S0_xy_func,
+            self.inv_S0_yx_func,
+            self.inv_S0_yy_func,
+            self.log_det_S0_func,
+        ]
         if any(f is None for f in s0_funcs_needed):
             missing_s0_func_names = [
-                name for name, func in zip(
-                    ["inv_S0_xx_func", "inv_S0_xy_func", "inv_S0_yx_func", "inv_S0_yy_func", "log_det_S0_func"],
-                    s0_funcs_needed, strict=False
-                ) if func is None
+                name
+                for name, func in zip(
+                    [
+                        "inv_S0_xx_func",
+                        "inv_S0_xy_func",
+                        "inv_S0_yx_func",
+                        "inv_S0_yy_func",
+                        "log_det_S0_func",
+                    ],
+                    s0_funcs_needed,
+                    strict=False,
+                )
+                if func is None
             ]
-            raise RuntimeError(f"S0 related functions {missing_s0_func_names} are missing for V1. Check __init__ warnings.")
+            msg = f"S0 related functions {missing_s0_func_names} are missing for V1. Check __init__ warnings."
+            raise RuntimeError(msg)
 
-        def evaluate_v1(theta_1_val: jnp.ndarray,
-                        theta_1_bar: jnp.ndarray,
-                        theta_2_bar: jnp.ndarray,
-                        theta_3_bar: jnp.ndarray) -> float:
+        def evaluate_v1(
+            theta_1_val: jnp.ndarray,
+            theta_1_bar: jnp.ndarray,
+            theta_2_bar: jnp.ndarray,
+            theta_3_bar: jnp.ndarray,
+        ) -> float:
             total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
 
             theta_1_val_j = jnp.asarray(theta_1_val, dtype=jnp.float32)
@@ -604,19 +765,37 @@ class LikelihoodEvaluator:
                     inv_S0_xy_val = self.inv_S0_xy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
                     inv_S0_yx_val = self.inv_S0_yx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
                     inv_S0_yy_val = self.inv_S0_yy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                    log_det_S0_val = self.log_det_S0_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                    log_det_S0_val = self.log_det_S0_func(
+                        x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j
+                    )
 
                     Dx_k_param = k - 1
                     Dy_k_param = k - 1
 
-                    Dx_val = self.Dx_func(L0_x_funcs, x_j, x_j_1, y_j_1,
-                                          theta_2_bar_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dx_k_param)
-                    Dy_val = self.Dy_func(L0_y_funcs, y_j, y_j_1, x_j_1,
-                                          theta_3_bar_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dy_k_param)
+                    Dx_val = self.Dx_func(
+                        L0_x_funcs,
+                        x_j,
+                        x_j_1,
+                        y_j_1,
+                        theta_2_bar_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dx_k_param,
+                    )
+                    Dy_val = self.Dy_func(
+                        L0_y_funcs,
+                        y_j,
+                        y_j_1,
+                        x_j_1,
+                        theta_3_bar_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dy_k_param,
+                    )
 
                     sum_S_xx = jnp.zeros((d_x, d_x), dtype=jnp.float32)
                     sum_S_xy = jnp.zeros((d_x, d_y), dtype=jnp.float32)
@@ -624,11 +803,19 @@ class LikelihoodEvaluator:
                     sum_S_yy = jnp.zeros((d_y, d_y), dtype=jnp.float32)
 
                     for l_s_loop in range(1, k):
-                        s_funcs_l_tuple = S_l_funcs[l_s_loop] # Renamed
-                        s_xx_l = s_funcs_l_tuple[0](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                        s_xy_l = s_funcs_l_tuple[1](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                        s_yx_l = s_funcs_l_tuple[2](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                        s_yy_l = s_funcs_l_tuple[3](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                        s_funcs_l_tuple = S_l_funcs[l_s_loop]  # Renamed
+                        s_xx_l = s_funcs_l_tuple[0](
+                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        )
+                        s_xy_l = s_funcs_l_tuple[1](
+                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        )
+                        s_yx_l = s_funcs_l_tuple[2](
+                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        )
+                        s_yy_l = s_funcs_l_tuple[3](
+                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        )
 
                         h_pow_l = jnp.power(h, float(l_s_loop))
                         sum_S_xx += h_pow_l * s_xx_l
@@ -660,49 +847,73 @@ class LikelihoodEvaluator:
                     print(f"Error during V1 evaluation at step j={j_idx}: {e}")
                     # ... (print details)
                     return jnp.nan
-            return float(total_log_likelihood / (2.0 * num_transitions)) if num_transitions > 0 else float(jnp.nan)
+            return (
+                float(total_log_likelihood / (2.0 * num_transitions))
+                if num_transitions > 0
+                else float(jnp.nan)
+            )
+
         return evaluate_v1
 
-    def make_quasi_likelihood_v2_evaluator(self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int) -> Callable:
+    def make_quasi_likelihood_v2_evaluator(
+        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+    ) -> Callable:
         x_series_jnp = jnp.asarray(x_series)
-        y_series_jnp = jnp.asarray(y_series) # y_series is used for y_j_1 in Dx_func
+        y_series_jnp = jnp.asarray(y_series)  # y_series is used for y_j_1 in Dx_func
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
-        if num_transitions < 1 or y_series_jnp.shape[0] != n: # Check y_series_jnp shape
-            raise ValueError("Time series length must be > 1 and shapes must match for V2.")
+        if num_transitions < 1 or y_series_jnp.shape[0] != n:  # Check y_series_jnp shape
+            msg = "Time series length must be > 1 and shapes must match for V2."
+            raise ValueError(msg)
 
         try:
             # Dx_func with k_arg = k uses L0_x_funcs up to index k. So range(k + 1) is {0, ..., k}.
             L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k + 1)}
         except Exception as e:
-            raise RuntimeError(f"V2 precalculation error (L0_x): {e}") from e
+            msg = f"V2 precalculation error (L0_x): {e}"
+            raise RuntimeError(msg) from e
 
         if self.inv_C_func is None:
-            raise RuntimeError("inv_C_func is missing for V2. Check __init__ warnings.")
+            msg = "inv_C_func is missing for V2. Check __init__ warnings."
+            raise RuntimeError(msg)
 
-        def evaluate_v2(theta_2_val: jnp.ndarray,
-                        theta_1_bar: jnp.ndarray,
-                        theta_2_bar: jnp.ndarray,
-                        theta_3_bar: jnp.ndarray) -> float:
+        def evaluate_v2(
+            theta_2_val: jnp.ndarray,
+            theta_1_bar: jnp.ndarray,
+            theta_2_bar: jnp.ndarray,
+            theta_3_bar: jnp.ndarray,
+        ) -> float:
             total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
 
             theta_2_val_j = jnp.asarray(theta_2_val, dtype=jnp.float32)
             theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
-            theta_2_bar_j = jnp.asarray(theta_2_bar, dtype=jnp.float32) # Used for L0 terms if k > 0
+            theta_2_bar_j = jnp.asarray(
+                theta_2_bar, dtype=jnp.float32
+            )  # Used for L0 terms if k > 0
             theta_3_bar_j = jnp.asarray(theta_3_bar, dtype=jnp.float32)
 
             for j_idx in range(1, n):
                 x_j = x_series_jnp[j_idx]
                 x_j_1 = x_series_jnp[j_idx - 1]
-                y_j_1 = y_series_jnp[j_idx - 1] # y_j_1 is needed for A_func and L0_x_funcs in Dx_func
+                y_j_1 = y_series_jnp[
+                    j_idx - 1
+                ]  # y_j_1 is needed for A_func and L0_x_funcs in Dx_func
                 try:
                     invC_val = self.inv_C_func(x_j_1, y_j_1, theta_1_bar_j)
 
                     Dx_k_param = k
-                    Dx_val = self.Dx_func(L0_x_funcs, x_j, x_j_1, y_j_1,
-                                          theta_2_val_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dx_k_param)
+                    Dx_val = self.Dx_func(
+                        L0_x_funcs,
+                        x_j,
+                        x_j_1,
+                        y_j_1,
+                        theta_2_val_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dx_k_param,
+                    )
 
                     term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
 
@@ -717,15 +928,19 @@ class LikelihoodEvaluator:
             if num_transitions > 0 and h > 0:
                 return float(total_log_likelihood / (2.0 * h * num_transitions))
             return float(jnp.nan)
+
         return evaluate_v2
 
-    def make_quasi_likelihood_v3_evaluator(self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int) -> Callable:
+    def make_quasi_likelihood_v3_evaluator(
+        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+    ) -> Callable:
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            raise ValueError("Time series length must be > 1 and shapes must match for V3.")
+            msg = "Time series length must be > 1 and shapes must match for V3."
+            raise ValueError(msg)
 
         try:
             # Dx_func(k_arg=k) uses L0_x_funcs up to k. So range(k + 1) i.e. {0,...,k}
@@ -733,18 +948,28 @@ class LikelihoodEvaluator:
             # Dy_func(k_arg=k+1) uses L0_y_funcs up to k+1. So range(k + 2) i.e. {0,...,k+1}
             L0_y_funcs = {m: self.L_0_func(self.y, m) for m in range(k + 2)}
         except Exception as e:
-            raise RuntimeError(f"V3 precalculation error (L0_x/L0_y): {e}") from e
+            msg = f"V3 precalculation error (L0_x/L0_y): {e}"
+            raise RuntimeError(msg) from e
 
         if self.inv_V_func is None or self.partial_x_H_transpose_inv_V_func is None:
-            print("Warning: V related functions (inv_V_func or partial_x_H_transpose_inv_V_func) are missing.")
-            def evaluator_unavailable_v3(*args: Any, **kwargs: Any) -> float: # Added type hints for args/kwargs
-                raise RuntimeError("V3 likelihood evaluator is unavailable due to missing V-related functions (likely V is singular).")
+            print(
+                "Warning: V related functions (inv_V_func or partial_x_H_transpose_inv_V_func) are missing."
+            )
+
+            def evaluator_unavailable_v3(
+                *args: Any, **kwargs: Any
+            ) -> float:  # Added type hints for args/kwargs
+                msg = "V3 likelihood evaluator is unavailable due to missing V-related functions (likely V is singular)."
+                raise RuntimeError(msg)
+
             return evaluator_unavailable_v3
 
-        def evaluate_v3(theta_3_val: jnp.ndarray,
-                        theta_1_bar: jnp.ndarray,
-                        theta_2_bar: jnp.ndarray,
-                        theta_3_bar: jnp.ndarray) -> float:
+        def evaluate_v3(
+            theta_3_val: jnp.ndarray,
+            theta_1_bar: jnp.ndarray,
+            theta_2_bar: jnp.ndarray,
+            theta_3_bar: jnp.ndarray,
+        ) -> float:
             total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
 
             theta_3_val_j = jnp.asarray(theta_3_val, dtype=jnp.float32)
@@ -759,19 +984,37 @@ class LikelihoodEvaluator:
                 y_j_1 = y_series_jnp[j_idx - 1]
                 try:
                     invV_val = self.inv_V_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
-                    pHTinvV_val = self.partial_x_H_transpose_inv_V_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
+                    pHTinvV_val = self.partial_x_H_transpose_inv_V_func(
+                        x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j
+                    )
 
                     Dx_k_param = k
                     Dy_k_param = k + 1
 
-                    Dx_val = self.Dx_func(L0_x_funcs, x_j, x_j_1, y_j_1,
-                                          theta_2_bar_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dx_k_param)
-                    Dy_val = self.Dy_func(L0_y_funcs, y_j, y_j_1, x_j_1,
-                                          theta_3_val_j,
-                                          theta_1_bar_j, theta_2_bar_j, theta_3_bar_j,
-                                          h, Dy_k_param)
+                    Dx_val = self.Dx_func(
+                        L0_x_funcs,
+                        x_j,
+                        x_j_1,
+                        y_j_1,
+                        theta_2_bar_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dx_k_param,
+                    )
+                    Dy_val = self.Dy_func(
+                        L0_y_funcs,
+                        y_j,
+                        y_j_1,
+                        x_j_1,
+                        theta_3_val_j,
+                        theta_1_bar_j,
+                        theta_2_bar_j,
+                        theta_3_bar_j,
+                        h,
+                        Dy_k_param,
+                    )
 
                     term1_V3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
                     term2_V3 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
@@ -790,9 +1033,12 @@ class LikelihoodEvaluator:
             if num_transitions > 0 and h != 0:
                 return float((6.0 * h * total_log_likelihood) / num_transitions)
             return float(jnp.nan)
+
         return evaluate_v3
 
     # EVALUATOR_FACTORIES_END
+
+
 # %%
 # The DegenerateDiffusionProcess class and the __main__ block are assumed to be
 # already JAX-compatible as per the user's setup (DegenerateDiffusionProcess_JAX.py)
