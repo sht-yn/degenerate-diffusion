@@ -1,38 +1,33 @@
 # %%
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import jax.numpy as jnp  # JAX NumPyをインポート
-
-# DegenerateDiffusionProcess_JAX は提供されたコードスニペットに含まれるため、
-# そのJAX対応バージョンを想定しています。
-# from jax import jit # JAXのjitはここでは直接使用しないが、呼び出し側で適用可能
-from einsum_sympy import einsum_sympy
-from project_imports import (
-    Any,
+import sympy as sp
+from jax import lax
+from sympy import (
     Array,
     Basic,
-    Callable,
-    # np, # NumPyは直接使用せず、jax.numpy (jnp) を使用
-    # einsum, power, isfinite, nan, # これらもjnpから使用
-    Dict,
-    Expr,  # Renamed sympy.zeros to sp_zeros to avoid conflict
+    Expr,
     Matrix,
-    NonInvertibleMatrixError,
     S,
-    Tuple,
     derive_by_array,
     factorial,
     lambdify,
     log,
     oo,
-    sp,
     srepr,
     tensorproduct,
 )
-from project_imports import zeros as sp_zeros
+from sympy import (
+    zeros as sp_zeros,
+)
+from sympy.matrices.common import NonInvertibleMatrixError
+
+from ..utils.einsum_sympy import einsum_sympy
 
 if TYPE_CHECKING:
-    from DegenerateDiffusionProcess_JAX import DegenerateDiffusionProcess
+    from ..processes.degenerate_diffusion_process_jax import DegenerateDiffusionProcess
 
 # --- 定数 ---
 INVALID_SREPR_KEY = "invalid_sympy_srepr"
@@ -47,9 +42,9 @@ class LikelihoodEvaluator:
     def __init__(self, model: "DegenerateDiffusionProcess") -> None:
         """LikelihoodEvaluator のインスタンスを初期化."""
         self.model = model
-        self._L_cache: Dict[Tuple[int, str], Array] = {}
-        self._L0_func_cache: Dict[Tuple[int, str], Callable] = {}
-        self._S_func_cache: Dict[int, Tuple[Callable, ...]] = {}
+        self._L_cache: dict[tuple[int, str], Array] = {}
+        self._L0_func_cache: dict[tuple[int, str], Callable] = {}
+        self._S_func_cache: dict[int, tuple[Callable, ...]] = {}
 
         # --- モデル属性への参照 ---
         self.x = model.x
@@ -415,7 +410,7 @@ class LikelihoodEvaluator:
     # --- Auxiliary functions for Quasi-Likelihood (JAXへ変更) ---
     def Dx_func(
         self,
-        L0_x_funcs: Dict[int, Callable],
+        L0_x_funcs: tuple[Callable, ...],
         x_j: jnp.ndarray,
         x_j_1: jnp.ndarray,
         y_j_1: jnp.ndarray,
@@ -446,8 +441,11 @@ class LikelihoodEvaluator:
                 h_pow_m = jnp.power(h, float(m_loop))
                 try:
                     L0_x_m_val = L0_x_funcs[m_loop](*args_for_L0_bar)
-                except KeyError as e:
-                    msg = f"Dx_func: L0_x_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_x_funcs.keys()) if L0_x_funcs else 'empty'}). k_arg was {k_arg}."
+                except IndexError as e:
+                    msg = (
+                        f"Dx_func: L0_x_funcs index m={m_loop} is out of range (len={len(L0_x_funcs)})."
+                        f" k_arg was {k_arg}."
+                    )
                     raise RuntimeError(msg) from e
                 except Exception as e:
                     msg = f"Dx_func: L0_x_funcs[{m_loop}] eval error: {e}"
@@ -457,7 +455,7 @@ class LikelihoodEvaluator:
 
     def Dy_func(
         self,
-        L0_y_funcs: Dict[int, Callable],
+        L0_y_funcs: tuple[Callable, ...],
         y_j: jnp.ndarray,
         y_j_1: jnp.ndarray,
         x_j_1: jnp.ndarray,
@@ -484,12 +482,15 @@ class LikelihoodEvaluator:
 
         if k_arg >= 2:
             args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
-            for m_loop in range(2, k_arg + 2):
+            for m_loop in range(2, k_arg + 1):
                 h_pow_m = jnp.power(h, float(m_loop))
                 try:
                     L0_y_m_val = L0_y_funcs[m_loop](*args_for_L0_bar)
-                except KeyError as e:
-                    msg = f"Dy_func: L0_y_funcs key m={m_loop} not found (dict has keys for m up to {max(L0_y_funcs.keys()) if L0_y_funcs else 'empty'}). k_arg was {k_arg}."
+                except IndexError as e:
+                    msg = (
+                        f"Dy_func: L0_y_funcs index m={m_loop} is out of range (len={len(L0_y_funcs)})."
+                        f" k_arg was {k_arg}."
+                    )
                     raise RuntimeError(msg) from e
                 except Exception as e:
                     msg = f"Dy_func: L0_y_funcs[{m_loop}] eval error: {e}"
@@ -498,7 +499,7 @@ class LikelihoodEvaluator:
         return D_y
 
     # --- S 項の計算 (SymPy部分は変更なし) ---
-    def S(self, k: int) -> Tuple[Array, Array, Array, Array]:
+    def S(self, k: int) -> tuple[Array, Array, Array, Array]:
         x_sym = self.x
         y_sym = self.y
 
@@ -568,7 +569,7 @@ class LikelihoodEvaluator:
 
         return S_xx, S_xy, S_yx, S_yy
 
-    def S_func(self, k: int) -> Tuple[Callable, Callable, Callable, Callable]:
+    def S_func(self, k: int) -> tuple[Callable, Callable, Callable, Callable]:
         cache_key = k
         if cache_key in self._S_func_cache:
             return self._S_func_cache[cache_key]
@@ -603,8 +604,8 @@ class LikelihoodEvaluator:
             raise ValueError(msg)
 
         try:
-            L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k)}
-            S_l_funcs = {l_s: self.S_func(l_s) for l_s in range(1, k)}
+            L0_x_funcs = tuple(self.L_0_func(self.x, m) for m in range(k))
+            S_l_funcs = tuple(self.S_func(l_s) for l_s in range(1, k))
         except Exception as e:
             msg = f"V1' precalculation error: {e}"
             raise RuntimeError(msg) from e
@@ -619,80 +620,63 @@ class LikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            total_log_likelihood = jnp.array(
-                0.0, dtype=jnp.float32
-            )  # Use jnp.array for accumulation
+            theta_1_val_j = jnp.asarray(theta_1_val)
+            theta_1_bar_j = jnp.asarray(theta_1_bar)
+            theta_2_bar_j = jnp.asarray(theta_2_bar)
+            theta_3_bar_j = jnp.asarray(theta_3_bar)
 
-            theta_1_val_j = jnp.asarray(theta_1_val, dtype=jnp.float32)
-            theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
-            theta_2_bar_j = jnp.asarray(theta_2_bar, dtype=jnp.float32)
-            theta_3_bar_j = jnp.asarray(theta_3_bar, dtype=jnp.float32)
-
-            for j_idx in range(1, n):
-                x_j = x_series_jnp[j_idx]
-                x_j_1 = x_series_jnp[j_idx - 1]
-                y_j_1 = y_series_jnp[j_idx - 1]
-                try:
-                    invC_val = self.inv_C_func(x_j_1, y_j_1, theta_1_val_j)
-                    logDetC_val = self.log_det_C_func(x_j_1, y_j_1, theta_1_val_j)
-                except Exception as e:
-                    print(f"Error during inv_C or log_det_C evaluation at step j={j_idx}: {e}")
-                    return jnp.nan
-                try:
-                    Dx_k_param = k - 1
-                    Dx_val = self.Dx_func(
-                        L0_x_funcs,
-                        x_j,
-                        x_j_1,
-                        y_j_1,
-                        theta_2_bar_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dx_k_param,
-                    )
-                except Exception as e:
-                    print(f"Error during Dx_func evaluation at step j={j_idx}: {e}")
-                    return jnp.nan
-                try:
-                    sum_Sxx_val = jnp.zeros((d_x, d_x), dtype=jnp.float32)
-                    for l_s_loop in range(1, k):
-                        Sxx_func_l = S_l_funcs[l_s_loop][0]
-                        Sxx_l_val = Sxx_func_l(
-                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
-                        )
-                        sum_Sxx_val += jnp.power(h, float(l_s_loop)) * Sxx_l_val
-                except Exception as e:
-                    print(f"Error during Sxx_func evaluation at step j={j_idx}: {e}")
-                    return jnp.nan
-                try:
-                    term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
-                    term2_trace = +jnp.einsum("ij,ji->", invC_val, sum_Sxx_val)
-                    term3_logdet = -logDetC_val
-
-                    step_likelihood = term1_quad + term2_trace + term3_logdet
-                    if not jnp.isfinite(step_likelihood):
-                        print(f"Warning: V1' eval at j={j_idx} is non-finite: {step_likelihood}")
-                        print(
-                            f"  T1_quad={term1_quad}, T2_trace={term2_trace}, T3_logdet={term3_logdet}"
-                        )
-                        print(
-                            f"  invC={invC_val}, Dx={Dx_val}, sumSxx={sum_Sxx_val}, logDetC={logDetC_val}"
-                        )
-                        return jnp.nan
-                    total_log_likelihood += step_likelihood
-                except Exception as e:
-                    print(f"Error during V1' evaluation at step j={j_idx}: {e}")
-                    print(
-                        f"  Inputs: x_j1={x_j_1}, y_j1={y_j_1}, th1_val={theta_1_val_j}, th_bars=..."
-                    )
-                    return jnp.nan
-            return (
-                float(total_log_likelihood / (2.0 * num_transitions))
-                if num_transitions > 0
-                else float(jnp.nan)
+            result_dtype = jnp.result_type(
+                theta_1_val_j.dtype, theta_1_bar_j.dtype, theta_2_bar_j.dtype, theta_3_bar_j.dtype
             )
+
+            def scan_body(total, step_inputs):
+                x_j, x_j_1, y_j_1 = step_inputs
+
+                invC_val = self.inv_C_func(x_j_1, y_j_1, theta_1_val_j)
+                logDetC_val = self.log_det_C_func(x_j_1, y_j_1, theta_1_val_j)
+
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k - 1,
+                )
+
+                sum_Sxx_val = jnp.zeros((d_x, d_x), dtype=invC_val.dtype)
+                for idx, S_funcs in enumerate(S_l_funcs, start=1):
+                    Sxx_func = S_funcs[0]
+                    sum_Sxx_val += (h**idx) * Sxx_func(
+                        x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                    )
+
+                term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
+                term2_trace = jnp.einsum("ij,ji->", invC_val, sum_Sxx_val)
+                term3_logdet = -logDetC_val
+
+                step_likelihood = term1_quad + term2_trace + term3_logdet
+                step_likelihood = jnp.where(
+                    jnp.isfinite(step_likelihood),
+                    step_likelihood,
+                    jnp.array(jnp.nan, dtype=step_likelihood.dtype),
+                )
+
+                return total + step_likelihood, None
+
+            initial_total = jnp.zeros((), dtype=result_dtype)
+            scan_inputs = (x_series_jnp[1:], x_series_jnp[:-1], y_series_jnp[:-1])
+            total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
+
+            if num_transitions > 0:
+                return total_log_likelihood / (2.0 * num_transitions)
+            return jnp.full_like(total_log_likelihood, jnp.nan)
+
+        return evaluate_v1_prime
 
     def make_quasi_likelihood_v1_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
@@ -709,9 +693,9 @@ class LikelihoodEvaluator:
             raise ValueError(msg)
 
         try:
-            L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k)}
-            L0_y_funcs = {m: self.L_0_func(self.y, m) for m in range(k + 1)}
-            S_l_funcs = {l_s: self.S_func(l_s) for l_s in range(1, k)}
+            L0_x_funcs = tuple(self.L_0_func(self.x, m) for m in range(k))
+            L0_y_funcs = tuple(self.L_0_func(self.y, m) for m in range(k + 1))
+            S_l_funcs = tuple(self.S_func(l_s) for l_s in range(1, k))
         except Exception as e:
             msg = f"V1 precalculation error: {e}"
             raise RuntimeError(msg) from e
@@ -748,110 +732,104 @@ class LikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
+            theta_1_val_j = jnp.asarray(theta_1_val)
+            theta_1_bar_j = jnp.asarray(theta_1_bar)
+            theta_2_bar_j = jnp.asarray(theta_2_bar)
+            theta_3_bar_j = jnp.asarray(theta_3_bar)
 
-            theta_1_val_j = jnp.asarray(theta_1_val, dtype=jnp.float32)
-            theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
-            theta_2_bar_j = jnp.asarray(theta_2_bar, dtype=jnp.float32)
-            theta_3_bar_j = jnp.asarray(theta_3_bar, dtype=jnp.float32)
-
-            for j_idx in range(1, n):
-                x_j = x_series_jnp[j_idx]
-                y_j = y_series_jnp[j_idx]
-                x_j_1 = x_series_jnp[j_idx - 1]
-                y_j_1 = y_series_jnp[j_idx - 1]
-                try:
-                    inv_S0_xx_val = self.inv_S0_xx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                    inv_S0_xy_val = self.inv_S0_xy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                    inv_S0_yx_val = self.inv_S0_yx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                    inv_S0_yy_val = self.inv_S0_yy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                    log_det_S0_val = self.log_det_S0_func(
-                        x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j
-                    )
-
-                    Dx_k_param = k - 1
-                    Dy_k_param = k - 1
-
-                    Dx_val = self.Dx_func(
-                        L0_x_funcs,
-                        x_j,
-                        x_j_1,
-                        y_j_1,
-                        theta_2_bar_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dx_k_param,
-                    )
-                    Dy_val = self.Dy_func(
-                        L0_y_funcs,
-                        y_j,
-                        y_j_1,
-                        x_j_1,
-                        theta_3_bar_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dy_k_param,
-                    )
-
-                    sum_S_xx = jnp.zeros((d_x, d_x), dtype=jnp.float32)
-                    sum_S_xy = jnp.zeros((d_x, d_y), dtype=jnp.float32)
-                    sum_S_yx = jnp.zeros((d_y, d_x), dtype=jnp.float32)
-                    sum_S_yy = jnp.zeros((d_y, d_y), dtype=jnp.float32)
-
-                    for l_s_loop in range(1, k):
-                        s_funcs_l_tuple = S_l_funcs[l_s_loop]  # Renamed
-                        s_xx_l = s_funcs_l_tuple[0](
-                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
-                        )
-                        s_xy_l = s_funcs_l_tuple[1](
-                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
-                        )
-                        s_yx_l = s_funcs_l_tuple[2](
-                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
-                        )
-                        s_yy_l = s_funcs_l_tuple[3](
-                            x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
-                        )
-
-                        h_pow_l = jnp.power(h, float(l_s_loop))
-                        sum_S_xx += h_pow_l * s_xx_l
-                        sum_S_xy += h_pow_l * s_xy_l
-                        sum_S_yx += h_pow_l * s_yx_l
-                        sum_S_yy += h_pow_l * s_yy_l
-
-                    q_xx = jnp.einsum("ij,i,j->", inv_S0_xx_val, Dx_val, Dx_val)
-                    q_xy = jnp.einsum("ij,i,j->", inv_S0_xy_val, Dx_val, Dy_val)
-                    q_yx = jnp.einsum("ij,i,j->", inv_S0_yx_val, Dy_val, Dx_val)
-                    q_yy = jnp.einsum("ij,i,j->", inv_S0_yy_val, Dy_val, Dy_val)
-                    quadratic_term = -(q_xx + q_xy + q_yx + q_yy)
-
-                    tr_xx = jnp.einsum("ij,ji->", inv_S0_xx_val, sum_S_xx)
-                    tr_xy = jnp.einsum("ij,ji->", inv_S0_xy_val, sum_S_yx)
-                    tr_yx = jnp.einsum("ij,ji->", inv_S0_yx_val, sum_S_xy)
-                    tr_yy = jnp.einsum("ij,ji->", inv_S0_yy_val, sum_S_yy)
-                    trace_term = tr_xx + tr_xy + tr_yx + tr_yy
-
-                    logdet_term = -log_det_S0_val
-
-                    step_likelihood = quadratic_term + trace_term + logdet_term
-                    if not jnp.isfinite(step_likelihood):
-                        print(f"Warning: V1 eval at j={j_idx} is non-finite: {step_likelihood}")
-                        # ... (print details)
-                        return jnp.nan
-                    total_log_likelihood += step_likelihood
-                except Exception as e:
-                    print(f"Error during V1 evaluation at step j={j_idx}: {e}")
-                    # ... (print details)
-                    return jnp.nan
-            return (
-                float(total_log_likelihood / (2.0 * num_transitions))
-                if num_transitions > 0
-                else float(jnp.nan)
+            result_dtype = jnp.result_type(
+                theta_1_val_j.dtype,
+                theta_1_bar_j.dtype,
+                theta_2_bar_j.dtype,
+                theta_3_bar_j.dtype,
             )
+
+            def scan_body(total, step_inputs):
+                x_j, y_j, x_j_1, y_j_1 = step_inputs
+
+                inv_S0_xx_val = self.inv_S0_xx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                inv_S0_xy_val = self.inv_S0_xy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                inv_S0_yx_val = self.inv_S0_yx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                inv_S0_yy_val = self.inv_S0_yy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                log_det_S0_val = self.log_det_S0_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k - 1,
+                )
+                Dy_val = self.Dy_func(
+                    L0_y_funcs,
+                    y_j,
+                    y_j_1,
+                    x_j_1,
+                    theta_3_bar_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k - 1,
+                )
+
+                sum_S_xx = jnp.zeros((d_x, d_x), dtype=inv_S0_xx_val.dtype)
+                sum_S_xy = jnp.zeros((d_x, d_y), dtype=inv_S0_xx_val.dtype)
+                sum_S_yx = jnp.zeros((d_y, d_x), dtype=inv_S0_xx_val.dtype)
+                sum_S_yy = jnp.zeros((d_y, d_y), dtype=inv_S0_xx_val.dtype)
+
+                for idx, s_funcs in enumerate(S_l_funcs, start=1):
+                    s_xx = s_funcs[0](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                    s_xy = s_funcs[1](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                    s_yx = s_funcs[2](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                    s_yy = s_funcs[3](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+
+                    h_power = h**idx
+                    sum_S_xx += h_power * s_xx
+                    sum_S_xy += h_power * s_xy
+                    sum_S_yx += h_power * s_yx
+                    sum_S_yy += h_power * s_yy
+
+                q_xx = jnp.einsum("ij,i,j->", inv_S0_xx_val, Dx_val, Dx_val)
+                q_xy = jnp.einsum("ij,i,j->", inv_S0_xy_val, Dx_val, Dy_val)
+                q_yx = jnp.einsum("ij,i,j->", inv_S0_yx_val, Dy_val, Dx_val)
+                q_yy = jnp.einsum("ij,i,j->", inv_S0_yy_val, Dy_val, Dy_val)
+                quadratic_term = -(q_xx + q_xy + q_yx + q_yy)
+
+                tr_xx = jnp.einsum("ij,ji->", inv_S0_xx_val, sum_S_xx)
+                tr_xy = jnp.einsum("ij,ji->", inv_S0_xy_val, sum_S_yx)
+                tr_yx = jnp.einsum("ij,ji->", inv_S0_yx_val, sum_S_xy)
+                tr_yy = jnp.einsum("ij,ji->", inv_S0_yy_val, sum_S_yy)
+                trace_term = tr_xx + tr_xy + tr_yx + tr_yy
+
+                logdet_term = -log_det_S0_val
+
+                step_likelihood = quadratic_term + trace_term + logdet_term
+                step_likelihood = jnp.where(
+                    jnp.isfinite(step_likelihood),
+                    step_likelihood,
+                    jnp.array(jnp.nan, dtype=step_likelihood.dtype),
+                )
+
+                return total + step_likelihood, None
+
+            initial_total = jnp.zeros((), dtype=result_dtype)
+            scan_inputs = (
+                x_series_jnp[1:],
+                y_series_jnp[1:],
+                x_series_jnp[:-1],
+                y_series_jnp[:-1],
+            )
+            total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
+
+            if num_transitions > 0:
+                return total_log_likelihood / (2.0 * num_transitions)
+            return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return evaluate_v1
 
@@ -868,7 +846,7 @@ class LikelihoodEvaluator:
 
         try:
             # Dx_func with k_arg = k uses L0_x_funcs up to index k. So range(k + 1) is {0, ..., k}.
-            L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k + 1)}
+            L0_x_funcs = tuple(self.L_0_func(self.x, m) for m in range(k + 1))
         except Exception as e:
             msg = f"V2 precalculation error (L0_x): {e}"
             raise RuntimeError(msg) from e
@@ -883,51 +861,51 @@ class LikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
+            theta_2_val_j = jnp.asarray(theta_2_val)
+            theta_1_bar_j = jnp.asarray(theta_1_bar)
+            theta_2_bar_j = jnp.asarray(theta_2_bar)
+            theta_3_bar_j = jnp.asarray(theta_3_bar)
 
-            theta_2_val_j = jnp.asarray(theta_2_val, dtype=jnp.float32)
-            theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
-            theta_2_bar_j = jnp.asarray(
-                theta_2_bar, dtype=jnp.float32
-            )  # Used for L0 terms if k > 0
-            theta_3_bar_j = jnp.asarray(theta_3_bar, dtype=jnp.float32)
+            result_dtype = jnp.result_type(
+                theta_2_val_j.dtype,
+                theta_1_bar_j.dtype,
+                theta_2_bar_j.dtype,
+                theta_3_bar_j.dtype,
+            )
 
-            for j_idx in range(1, n):
-                x_j = x_series_jnp[j_idx]
-                x_j_1 = x_series_jnp[j_idx - 1]
-                y_j_1 = y_series_jnp[
-                    j_idx - 1
-                ]  # y_j_1 is needed for A_func and L0_x_funcs in Dx_func
-                try:
-                    invC_val = self.inv_C_func(x_j_1, y_j_1, theta_1_bar_j)
+            def scan_body(total, step_inputs):
+                x_j, x_j_1, y_j_1 = step_inputs
 
-                    Dx_k_param = k
-                    Dx_val = self.Dx_func(
-                        L0_x_funcs,
-                        x_j,
-                        x_j_1,
-                        y_j_1,
-                        theta_2_val_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dx_k_param,
-                    )
+                invC_val = self.inv_C_func(x_j_1, y_j_1, theta_1_bar_j)
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_val_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k,
+                )
 
-                    term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
+                term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
+                step_likelihood = jnp.where(
+                    jnp.isfinite(term1_quad),
+                    term1_quad,
+                    jnp.array(jnp.nan, dtype=term1_quad.dtype),
+                )
 
-                    if not jnp.isfinite(term1_quad):
-                        print(f"Warning: V2 eval at j={j_idx} is non-finite: {term1_quad}")
-                        return jnp.nan
-                    total_log_likelihood += term1_quad
-                except Exception as e:
-                    print(f"Error during V2 evaluation at step j={j_idx}: {e}")
-                    # ... (print details)
-                    return jnp.nan
+                return total + step_likelihood, None
+
+            initial_total = jnp.zeros((), dtype=result_dtype)
+            scan_inputs = (x_series_jnp[1:], x_series_jnp[:-1], y_series_jnp[:-1])
+            total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
+
             if num_transitions > 0 and h > 0:
-                return float(total_log_likelihood / (2.0 * h * num_transitions))
-            return float(jnp.nan)
+                return total_log_likelihood / (2.0 * h * num_transitions)
+            return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return evaluate_v2
 
@@ -944,9 +922,9 @@ class LikelihoodEvaluator:
 
         try:
             # Dx_func(k_arg=k) uses L0_x_funcs up to k. So range(k + 1) i.e. {0,...,k}
-            L0_x_funcs = {m: self.L_0_func(self.x, m) for m in range(k + 1)}
+            L0_x_funcs = tuple(self.L_0_func(self.x, m) for m in range(k + 1))
             # Dy_func(k_arg=k+1) uses L0_y_funcs up to k+1. So range(k + 2) i.e. {0,...,k+1}
-            L0_y_funcs = {m: self.L_0_func(self.y, m) for m in range(k + 2)}
+            L0_y_funcs = tuple(self.L_0_func(self.y, m) for m in range(k + 2))
         except Exception as e:
             msg = f"V3 precalculation error (L0_x/L0_y): {e}"
             raise RuntimeError(msg) from e
@@ -970,69 +948,75 @@ class LikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            total_log_likelihood = jnp.array(0.0, dtype=jnp.float32)
+            theta_3_val_j = jnp.asarray(theta_3_val)
+            theta_1_bar_j = jnp.asarray(theta_1_bar)
+            theta_2_bar_j = jnp.asarray(theta_2_bar)
+            theta_3_bar_j = jnp.asarray(theta_3_bar)
 
-            theta_3_val_j = jnp.asarray(theta_3_val, dtype=jnp.float32)
-            theta_1_bar_j = jnp.asarray(theta_1_bar, dtype=jnp.float32)
-            theta_2_bar_j = jnp.asarray(theta_2_bar, dtype=jnp.float32)
-            theta_3_bar_j = jnp.asarray(theta_3_bar, dtype=jnp.float32)
+            result_dtype = jnp.result_type(
+                theta_3_val_j.dtype,
+                theta_1_bar_j.dtype,
+                theta_2_bar_j.dtype,
+                theta_3_bar_j.dtype,
+            )
 
-            for j_idx in range(1, n):
-                x_j = x_series_jnp[j_idx]
-                y_j = y_series_jnp[j_idx]
-                x_j_1 = x_series_jnp[j_idx - 1]
-                y_j_1 = y_series_jnp[j_idx - 1]
-                try:
-                    invV_val = self.inv_V_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
-                    pHTinvV_val = self.partial_x_H_transpose_inv_V_func(
-                        x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j
-                    )
+            def scan_body(total, step_inputs):
+                x_j, y_j, x_j_1, y_j_1 = step_inputs
 
-                    Dx_k_param = k
-                    Dy_k_param = k + 1
+                invV_val = self.inv_V_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
+                pHTinvV_val = self.partial_x_H_transpose_inv_V_func(
+                    x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j
+                )
 
-                    Dx_val = self.Dx_func(
-                        L0_x_funcs,
-                        x_j,
-                        x_j_1,
-                        y_j_1,
-                        theta_2_bar_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dx_k_param,
-                    )
-                    Dy_val = self.Dy_func(
-                        L0_y_funcs,
-                        y_j,
-                        y_j_1,
-                        x_j_1,
-                        theta_3_val_j,
-                        theta_1_bar_j,
-                        theta_2_bar_j,
-                        theta_3_bar_j,
-                        h,
-                        Dy_k_param,
-                    )
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k,
+                )
+                Dy_val = self.Dy_func(
+                    L0_y_funcs,
+                    y_j,
+                    y_j_1,
+                    x_j_1,
+                    theta_3_val_j,
+                    theta_1_bar_j,
+                    theta_2_bar_j,
+                    theta_3_bar_j,
+                    h,
+                    k + 1,
+                )
 
-                    term1_V3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
-                    term2_V3 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
+                term1_V3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
+                term2_V3 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
 
-                    step_likelihood = term1_V3 + term2_V3
-                    if not jnp.isfinite(step_likelihood):
-                        print(f"Warning: V3 eval at j={j_idx} is non-finite: {step_likelihood}")
-                        # ... (print details)
-                        return jnp.nan
-                    total_log_likelihood += step_likelihood
-                except Exception as e:
-                    print(f"Error during V3 evaluation at step j={j_idx}: {e}")
-                    # ... (print details)
-                    return jnp.nan
+                step_likelihood = term1_V3 + term2_V3
+                step_likelihood = jnp.where(
+                    jnp.isfinite(step_likelihood),
+                    step_likelihood,
+                    jnp.array(jnp.nan, dtype=step_likelihood.dtype),
+                )
+
+                return total + step_likelihood, None
+
+            initial_total = jnp.zeros((), dtype=result_dtype)
+            scan_inputs = (
+                x_series_jnp[1:],
+                y_series_jnp[1:],
+                x_series_jnp[:-1],
+                y_series_jnp[:-1],
+            )
+            total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
 
             if num_transitions > 0 and h != 0:
-                return float((6.0 * h * total_log_likelihood) / num_transitions)
-            return float(jnp.nan)
+                return (6.0 * h * total_log_likelihood) / num_transitions
+            return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return evaluate_v3
 
@@ -1050,17 +1034,14 @@ class LikelihoodEvaluator:
 # This is NOT part of the direct answer code block for LikelihoodEvaluator,
 # but shows the expected JAX usage in the model.
 """
+from dataclasses import dataclass
 from functools import partial
+
 import jax
 from jax import lax
-from jax import numpy as jnp_model_example # Using a different alias for clarity
-from project_imports import (
-    dataclass,
-    lambdify as lambdify_model_example, # Using a different alias
-    # np, # Assuming np is not used here directly if fully JAX
-    sp as sp_model_example, # Using a different alias
-    symbols as symbols_model_example, # Using a different alias
-)
+from jax import numpy as jnp_model_example  # Using a different alias for clarity
+import sympy as sp_model_example
+from sympy import lambdify as lambdify_model_example, symbols as symbols_model_example
 
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess_Example: # Renamed for clarity

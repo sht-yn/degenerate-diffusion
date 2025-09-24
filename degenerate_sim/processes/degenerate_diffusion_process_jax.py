@@ -1,4 +1,6 @@
 # %%
+# dataclassをインポート
+from dataclasses import dataclass
 from functools import partial
 
 # import math # roundは組み込み関数のため不要
@@ -9,8 +11,6 @@ import sympy as sp
 from jax import lax  # For jax.lax.scan
 from jax import numpy as jnp
 from sympy import lambdify, symbols
-#dataclassをインポート
-from dataclasses import dataclass
 
 
 # %%
@@ -47,7 +47,7 @@ class DegenerateDiffusionProcess:
             print(f"Error during lambdification in __post_init__: {e}")
             raise
 
-    @partial(jax.jit, static_argnums=(0, 5, 6, 7, 10, 11))
+    @partial(jax.jit, static_argnums=(0, 5, 6, 9, 10))
     def _simulate_jax_core(
         self,  # 0: static
         theta_1_val: jnp.ndarray,  # 1
@@ -55,12 +55,11 @@ class DegenerateDiffusionProcess:
         theta_3_val: jnp.ndarray,  # 3
         key: jax.random.PRNGKey,  # 4
         t_max: float,  # 5: static
-        h: float,  # 6: static
-        burn_out: float,  # 7: static
-        x0_val: jnp.ndarray,  # 8
-        y0_val: jnp.ndarray,  # 9
-        dt: float,  # 10: static
-        step_stride_static: int,  # 11: static
+        burn_out: float,  # 6: static
+        x0_val: jnp.ndarray,  # 7
+        y0_val: jnp.ndarray,  # 8
+        dt: float,  # 9: static
+        step_stride_static: int,  # 10: static
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """JAX-optimized core simulation loop using Euler-Maruyama.
         lax.scan length (total_steps_for_scan_py) and slice indices (start_index_py, step_stride_static)
@@ -169,7 +168,6 @@ class DegenerateDiffusionProcess:
             theta_3_jnp,
             key,
             t_max,
-            h,
             burn_out,
             x0_jnp,
             y0_jnp,

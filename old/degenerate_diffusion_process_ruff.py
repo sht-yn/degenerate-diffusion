@@ -3,20 +3,15 @@
 import warnings
 from dataclasses import dataclass
 
-# Third-party imports (numpy and sympy are loaded via project_imports)
-# Local application/library specific imports
-from project_imports import (  # Assuming this provides sp, symbols, lambdify, np
-    lambdify,
-    np,
-    sp,
-    symbols,
-)
+# Third-party imports
+import numpy as np
+import sympy as sp
+from sympy import lambdify, symbols
 
 # Note: Original code also imported jax, jax.numpy, and functools.partial,
 # but they were flagged as unused (F401).
-# Original code also imported typing.Tuple, Optional, Sequence and dataclasses.dataclass
-# directly or via project_imports, which are now handled by modern typing syntax
-# and direct import of dataclass.
+# Original code also imported typing.Tuple, Optional, Sequence and dataclasses.dataclass,
+# which are now handled by modern typing syntax and direct imports.
 
 
 # %%

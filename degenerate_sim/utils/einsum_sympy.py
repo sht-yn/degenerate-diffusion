@@ -1,4 +1,8 @@
-from project_imports import ImmutableDenseNDimArray, defaultdict, product, sp  # Sも追加
+from collections import defaultdict
+from itertools import product
+
+import sympy as sp
+from sympy import ImmutableDenseNDimArray
 
 
 def einsum_sympy(subscripts, *operands):
@@ -45,12 +49,12 @@ def einsum_sympy(subscripts, *operands):
     return ImmutableDenseNDimArray(flat_data, output_shape)
 
 
-# テスト：ベクトルのテンソル積 "i,j->ij"
-x0, x1 = sp.symbols("x0 x1")
-y0, y1, y2 = sp.symbols("y0 y1 y2")
-u = ImmutableDenseNDimArray([x0, x1])  # shape (2,)
-v = ImmutableDenseNDimArray([y0, y1, y2])  # shape (3,)
+# # テスト：ベクトルのテンソル積 "i,j->ij"
+# x0, x1 = sp.symbols("x0 x1")
+# y0, y1, y2 = sp.symbols("y0 y1 y2")
+# u = ImmutableDenseNDimArray([x0, x1])  # shape (2,)
+# v = ImmutableDenseNDimArray([y0, y1, y2])  # shape (3,)
 
-# outer product
-tensor_product_result = einsum_sympy("i,j->ij", u, v)
-tensor_product_result.shape, tensor_product_result
+# # outer product
+# tensor_product_result = einsum_sympy("i,j->ij", u, v)
+# tensor_product_result.shape, tensor_product_result

@@ -1,35 +1,31 @@
 # %%
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Never
 
-from einsum_sympy import einsum_sympy
-from project_imports import (
+import numpy as np
+import sympy as sp
+from numpy import einsum, isfinite, nan, power
+from sympy import (
     Array,
     Basic,
-    Callable,
-    Dict,
     Expr,
     Matrix,
-    NonInvertibleMatrixError,
     S,
-    Tuple,
     derive_by_array,
-    einsum,
     factorial,
-    isfinite,
     lambdify,
     log,
-    nan,
-    np,  # NumPy関連 (einsumなどはproject_importsで再エクスポート済み)
     oo,
-    power,
-    sp,
     srepr,
     tensorproduct,
     zeros,
 )
+from sympy.matrices.common import NonInvertibleMatrixError
+
+from ..utils.einsum_sympy import einsum_sympy
 
 if TYPE_CHECKING:
-    from DegenerateDiffusionProcess import DegenerateDiffusionProcess
+    from ..processes.degenerate_diffusion_process import DegenerateDiffusionProcess
 
 # --- 定数 ---
 INVALID_SREPR_KEY = "invalid_sympy_srepr"
@@ -44,9 +40,9 @@ class LikelihoodEvaluator:
     def __init__(self, model: "DegenerateDiffusionProcess") -> None:
         """LikelihoodEvaluator のインスタンスを初期化."""
         self.model = model
-        self._L_cache: Dict[Tuple[int, str], Array] = {}
-        self._L0_func_cache: Dict[Tuple[int, str], Callable] = {}
-        self._S_func_cache: Dict[int, Tuple[Callable, ...]] = {}
+        self._L_cache: dict[tuple[int, str], Array] = {}
+        self._L0_func_cache: dict[tuple[int, str], Callable] = {}
+        self._S_func_cache: dict[int, tuple[Callable, ...]] = {}
 
         # --- モデル属性への参照 ---
         self.x = model.x
@@ -456,7 +452,7 @@ class LikelihoodEvaluator:
     # --- Auxiliary functions for Quasi-Likelihood ---
     def Dx_func(
         self,
-        L0_x_funcs: Dict[int, Callable],
+        L0_x_funcs: dict[int, Callable],
         x_j: np.ndarray,
         x_j_1: np.ndarray,
         y_j_1: np.ndarray,
@@ -500,7 +496,7 @@ class LikelihoodEvaluator:
 
     def Dy_func(
         self,
-        L0_y_funcs: Dict[int, Callable],
+        L0_y_funcs: dict[int, Callable],
         y_j: np.ndarray,
         y_j_1: np.ndarray,
         x_j_1: np.ndarray,
@@ -543,7 +539,7 @@ class LikelihoodEvaluator:
         return D_y
 
     # --- S 項の計算 (変更なし) ---
-    def S(self, k: int) -> Tuple[Array, Array, Array, Array]:
+    def S(self, k: int) -> tuple[Array, Array, Array, Array]:
         x_sym = self.x
         y_sym = self.y
 
@@ -614,7 +610,7 @@ class LikelihoodEvaluator:
 
         return S_xx, S_xy, S_yx, S_yy
 
-    def S_func(self, k: int) -> Tuple[Callable, Callable, Callable, Callable]:
+    def S_func(self, k: int) -> tuple[Callable, Callable, Callable, Callable]:
         cache_key = k
         if cache_key in self._S_func_cache:
             return self._S_func_cache[cache_key]
