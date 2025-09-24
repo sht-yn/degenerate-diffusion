@@ -1,0 +1,249 @@
+\documentclass[a4paper,11pt]{jsarticle}
+\usepackage{yano}
+\begin{document}
+\section{Construction of estimators and the main theorem}
+For $k =0,\cdots, k_0$, we define the following random fields under [A4]:
+\begin{align}
+    \mathcal{D}^{k}_{n,j}(\theta_2,\theta_3,\bar{\theta}) &:= \begin{pmatrix}
+    \mathcal{D}^{k,x}_{n,j}(\theta_2,\bar{\theta}) \\ \mathcal{D}^{k,y}_{n,j}(\theta_3,\bar{\theta}) 
+\end{pmatrix}\\
+&:= \begin{cases}
+    \begin{pmatrix}
+        h_n^{-1/2}(X_{n,j} - X_{n,j-1}) \\
+        h_n^{-3/2}(Y_{n,j} - Y_{n,j-1})
+    \end{pmatrix} & (k = 0) \\[2ex]
+    \begin{pmatrix}
+        h_n^{-1/2}(X_{n,j} - X_{n,j-1} - hA_{n,j-1}(\theta_2)) \\
+        h_n^{-3/2}(Y_{n,j} - Y_{n,j-1} - hH_{n,j-1}(\theta_3))
+    \end{pmatrix} & (k = 1) \\[2ex]
+    \begin{pmatrix}
+        h_n^{-1/2}(X_{n,j} - X_{n,j-1} - hA_{n,j-1}(\theta_2) - \sum_{m=2}^k h_n^m(L_0^m\pi_x)_{n,j-1}(\bar{\theta})) \\
+        h_n^{-3/2}(Y_{n,j} - Y_{n,j-1} - hH_{n,j-1}(\theta_3) - \sum_{m=2}^{k+1}h_n^m(L_0^m\pi_y)_{n,j-1}(\bar{\theta}))
+    \end{pmatrix} & (k \geq 2)
+\end{cases}, \\ \mathcal{D}_{n,j}^k(\bar{\theta})&: =     \mathcal{D}^{k}_{n,j}(\bar{\theta}_2,\bar{\theta}_3,\bar{\theta}).
+\end{align}
+For any integer $l$, we define the following formal matrix-valued polynomials constructed from formal variables representing partial derivatives $\{\partial_z^{l_A} A, \partial_z^{l_B} B, \partial_z^{l_H} H\}_{l_A,l_B,l_H =0}^{\infty}$ and $z$:
+\begin{align*}
+   \mathscr{T}^l&: =\begin{pmatrix}
+       \mathscr{T}^{l,xx} & \mathscr{T}^{l,xy} \\ \mathscr{T}^{l,yx} & \mathscr{T}^{l,yy}
+   \end{pmatrix} \\ & :=\begin{pmatrix}
+       L_0^{l+1} \pi_x^{\otimes  2} & L_0^{l+2}  (\pi_x \otimes \pi_y )\\
+       L_0^{l+2}( \pi_y \otimes \pi_x)  &  L_0^{l+3} \pi_y^{\otimes 2}
+   \end{pmatrix}, \\
+   \mathscr{U}^l&:= \begin{pmatrix}
+       \mathscr{U}^{l,xx} & \mathscr{U}^{l,xy} \\ \mathscr{U}^{l,yx} & \mathscr{U}^{l,yy}
+   \end{pmatrix}\\ & := \begin{pmatrix}
+       \sum_{m_1 +m_2 = l +1} L_0^{m_1} \pi_x \otimes L_0^{m_2} \pi_x & \sum_{m_1+m_2 = l +2} L_0^{m_1}\pi_x \otimes  L_0^{m_2} \pi_y  \\
+       \sum_{m_1+m_2 = l +2} L_0^{m_1}\pi_y \otimes L_0^{m_2} \pi_x & \sum_{m_1 +m_2  = l +3} L_0^{m_1}\pi_y \otimes L_0^{m_2}\pi_y
+   \end{pmatrix}, \\
+   \mathscr{S}^l &  := \begin{pmatrix}
+       \mathscr{S}^{l,xx} & \mathscr{S}^{l,xy} \\ \mathscr{S}^{l,yx} & \mathscr{S}^{l,yy}
+   \end{pmatrix} \\ & := \mathscr{T}^l -\mathscr{U}^l,
+\end{align*}
+where  the tensor products are taken in the range space. For instance, $\pi_x^{\otimes 2} $ means $z = (x,y) \mapsto x^{\otimes 2} $. Then, 
+$T^l(z,\theta),U^l(z,\theta)$ and $S^l(z,\theta)$ are defined as the evaluation of the formal polynomials $\mathscr{T}^l,\mathscr{U}^l$ and $\mathscr{S}^l$ at $\{\partial_z^{l_A} A(z,\theta), \partial_z^{l_B} B(z,\theta), \partial_z^{l_H} H(z , \theta)\}_{l_A,l_B,l_H =0}^{\infty}$ and $z$, respectively, where we set any non-existent partial derivatives to 0. Similarly, we define $T^{l,xx}(z,\theta),T^{l,xy}(z,\theta),T^{l,yx}(z,\theta) $ and $T^{l,yy}(z,\theta) $, as well as the corresponding components of $U^l(z,\theta)$ and $S^l(z,\theta)$, in the same manner, that is,
+\begin{align}
+T^l(z,\theta) &= \begin{pmatrix}
+    T^{l,xx}(z,\theta) & T^{l,xy}(z,\theta) \\ T^{l,yx}(z,\theta) & T^{l,yy}(z,\theta)
+\end{pmatrix} ,   \\U^l(z,\theta) &= \begin{pmatrix}
+U^{l,xx}(z,\theta) & U^{l,xy}(z,\theta) \\ U^{l,yx}(z,\theta) & U^{l,yy}(z,\theta)
+\end{pmatrix}, \\
+S^l(z,\theta) &= \begin{pmatrix}
+S^{l,xx}(z,\theta) & S^{l,xy}(z,\theta) \\ S^{l,yx}(z,\theta) & S^{l,yy}(z,\theta)
+\end{pmatrix}.
+\end{align}
+For instance, when $d_x = d_y = r = 1, p =2$,
+\begin{align}
+      \mathscr{T}^{0,xy} = \mathscr{T}^{0,yx} &  = \begin{aligned}[t]
+&  AH + \frac{1}{2} B^2 \partial_x H \\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{4} B^2 \partial_x^2 A + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A + \frac{1}{4}B^2 \partial_x^2 A  +  \frac{1}{2}H \partial_y A), 
+\end{aligned}\label{are}
+\\  \mathscr{U}^{0,xy} = \mathscr{U}^{0,yx} &= \begin{aligned}[t] & AH\\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{4} B^2 \partial_x^2 A + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A + \frac{1}{4}B^2 \partial_x^2 A  +  \frac{1}{2}H \partial_y A),
+\end{aligned} \label{sore}\\ \mathscr{S}^{0,xy}  = \mathscr{S}^{0,yx} = & \frac{1}{2} B^2 \partial_x H. \label{kore}
+\end{align}
+If $ p =2$, we only assume $A \in C_\uparrow^{1,3 }(\mathbb{R}^{d_z} \times \Theta_2 ; \mathbb{R}^{d_x}),B \in C_\uparrow^{2,3}( \mathbb{R}^{d_z} \times \Theta_1; \mathbb{R}^{d_x} \otimes \mathbb{R}^r)$ and $H \in C_\uparrow^{3,2}(\mathbb{R}^{d_z} \times \Theta_3; \mathbb{R}^{d_y})$ in [A4]. Thus, if $p =2$, we obtain
+\begin{align}
+    T^{0,xy} = T^{0,yx} &= \begin{cases}
+         \begin{aligned}
+&  AH + \frac{1}{2} B^2 \partial_x H \\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{4} B^2 \partial_x^2 A + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A + \frac{1}{4}B^2 \partial_x^2 A  +  \frac{1}{2}H \partial_y A),
+\end{aligned} & \text{if } \partial_x^2 A \text{ exists,} \\    \begin{aligned}
+&  AH + \frac{1}{2} B^2 \partial_x H \\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A  +   \frac{1}{2}H \partial_y A) 
+,\end{aligned}&  \text{if } \partial_x^2 A \text{ does not exist,}
+    \end{cases} \\   U^{0,xy} = U^{0,yx} &= \begin{cases}
+         \begin{aligned}
+&  AH \\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{4} B^2 \partial_x^2 A + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A + \frac{1}{4}B^2 \partial_x^2 A  +  \frac{1}{2}H \partial_y A)
+,\end{aligned} & \text{if } \partial_x^2 A \text{ exists,} \\    \begin{aligned}
+&  AH\\&+ x ( \frac{1}{2}A  \partial_x H  + \frac{1}{2} H \partial_y H) \\ & + y (  \frac{1}{2}A \partial_x A  +   \frac{1}{2}H \partial_y A)
+,\end{aligned}&  \text{if } \partial_x^2 A \text{ does not exist.}
+    \end{cases} \\  S^{0,xy} = S^{0,yx} &= \frac{1}{2} B^2  \partial_x^2 H.
+\end{align}
+For $l \leq k_0$, $\mathscr{T}^l$ and $\mathscr{U}^l$ are formally defined using derivatives of order higher than that assumed in [A4] as $\eqref{are}$ and \eqref{sore}. However, due to the cancellation of higher-order terms, their difference $\mathscr{S}^l$ is actually a polynomial that involves only derivatives of $A$, $B$, and $H$ up to the order assumed in [A4] as \eqref{kore}. Therefore, when the coefficient functions satisfy [A4], we can explicitly compute $S^l$ by directly differentiating the expressions given above.
+% \begin{align}
+%     \mathcal{D}^{k} _{n,j}(\theta_2,\theta_3,\bar{\theta})   &:= \begin{pmatrix}
+%             \mathcal{D}^{k,x}_{n,j}(\theta_2 ,\bar{\theta}) \\ \mathcal{D}^{k,y}_{n,j}(\theta _3,\bar{\theta}) 
+%         \end{pmatrix}\\ \MoveEqLeft := \begin{pmatrix}
+%         h_n^{-1/2} (X_{n,j}- X_{n,j-1}  -1_{\{1 \leq k\}} h_n A_{n,j-1} (\theta_2) -\sum_{k= 2}^{k} h_n^k(L^k\pi_x)_{n,j-1}(\bar{\theta}) )\\h_n^{-3/2}(Y_{n,j} -Y_{n,j-1} -1_{\{1 \leq k\}}hH_{n,j-1}(\theta_3)- \sum_{k=2}^{k +1}h_n^k (L^k\pi_y)_{n,j-1} (\bar{\theta})) 
+%     \end{pmatrix},\\
+%      \mathcal{M}^{k} _{n,j}(z,\theta) &:=  \begin{pmatrix}
+%         \mathcal{M}^{k,x}_{n,j}(z,\theta) \\ \mathcal{M}_{n,j}^{k,y}(z,\theta)
+%     \end{pmatrix} \\ \MoveEqLeft[4] := \begin{pmatrix}
+%         h_n^{-1/2}\left( \begin{aligned}
+%               &\sum_{\substack{1 \leq \len(W) \leq k \\ \len_M(W) \geq 1}} W\pi_x(z,\theta) \cdot I^W_{n,j} \\ &+ \sum_{\substack{\len(W') = k \\ \len_M(W') \geq 1}}LW'\pi_x(z,\theta)\cdot I_{n,j}^{LW'} + MW'\pi_x(z,\theta) \cdot I_{n,j}^{MW'}
+%          \end{aligned}\right)  \\ h_n^{-3/2} \left( \begin{aligned}
+%              &\sum_{\substack{1 \leq \len(W) \leq k+1 \\ \len_M(W),\len_L(W) \geq 1}}W\pi_y(z,\theta)\cdot I_{n,j}^W  \\ & +\sum_{\substack{ \len(W') = k +1 \\ \len_M(W'),\len_L(W') \geq 1 }} LW'\pi_y(z,\theta) \cdot I_{n,j}^{LW'} + MW'\pi_y(z,\theta)  \cdot I_{n,j}^{M W'}
+%          \end{aligned} \right)
+%         \end{pmatrix},\\
+%              \mathcal{M}_{n,j}^{k} (\theta) &:= \mathcal{M}_{n,j}^{k} (Z_{n,j-1},\theta),\\
+%                \mathcal{R}^{\text{M},k} _{n,j}   & := \begin{pmatrix}
+%         \mathcal{R}_{n,j}^{\text{M},k,x}  \\ \mathcal{R}_{n,j}^{\text{M},k,y}
+%     \end{pmatrix}\\ \MoveEqLeft:= \begin{pmatrix}
+%     h_n^{-1/2}    \left(\begin{aligned}
+%   &  \sum_{\substack{\len(W') = k \\ \len_M(W') \geq 1}} I_{n,j}^{LW'}(LW' \pi_x(z,\theta^*) - LW'\pi_x (z',\theta^*))  \\& + \sum_{\substack{\len(W') = k \\ \len_M(W') \geq 1}} I_{n,j}^{MW'}( MW' \pi_x(z,\theta^*) - MW'\pi_x (z',\theta^*))
+% \end{aligned}\right) \\h_n^{-3/2}\left( \begin{aligned}
+%     & \sum_{\substack{ \len(W') = k +1 \\ \len_M(W'),\len_L(W') \geq 1 }} I_{n,j}^{LW'}(LW'\pi_y(z,\theta^*) - LW'\pi_y(z',\theta^*))
+%         \\ & +\sum_{\substack{ \len(W') = k +1 \\ \len_M(W'),\len_L(W') \geq 1 }}  I_{n,j}^{MW'}(MW'\pi_y(z,\theta^*) - MW'\pi_y(z',\theta^*))
+% \end{aligned}\right)
+%     \end{pmatrix}  , \\  \mathcal{R}^{\text{L},k}_{n,j}   & := \begin{pmatrix}
+%         \mathcal{R}_{n,j}^{\text{L},k,x}  \\ \mathcal{R}_{n,j}^{\text{L},k,y}
+%     \end{pmatrix}\\ &:= \begin{pmatrix}
+%         h_n^{-1/2} \big(I_{n,j}^{L^{k} }( L^{k} \pi_x(z,\theta^*) - L^{k } \pi_x(z',\theta^*))\big) \\ h_n^{-3/2} \big(  I_{n,j}^{L^{k +1} } (L^{k +1}\pi_y(z,\theta^*) - L^{k +1} \pi_y(z',\theta^*) ) \big)
+%     \end{pmatrix} , \\ 
+%     \mathcal{R}_{n,j}^{k} &:= \mathcal{R}_{n,j}^{\text{M},k} + \mathcal{R}_{n,j}^{\text{L},k}.
+% \end{align}
+From simple calculations, we have $\mathscr{S}^l = 0$ for $l <0$ and
+\begin{align}
+    \mathscr{S}^0 & = \begin{pmatrix}
+        C  & 2^{-1} C(\partial_x H)^{\star} \\ 2^{-1} (\partial_x H )C& 3^{-1}( \partial_x H)C( \partial_x H)^{\star}
+    \end{pmatrix},\\  S^0 &= \begin{pmatrix}
+        C  & 2^{-1} C(\partial_x H)^{\star} \\ 2^{-1} (\partial_x H )C& 3^{-1}( \partial_x H)C( \partial_x H)^{\star}
+    \end{pmatrix}
+\end{align}
+so from [A5], we have $\inf_{z,\theta_1,\theta_3} \det S^0(z,\theta_1,\theta_3)>0$. Also,
+\begin{align}
+    (S^0)^{-1} =   \begin{pmatrix}
+        C^{-1}  + 3( \partial_x H)^\star V^{-1}\partial_x H & -6 (\partial_x H)^\star V^{-1} \\ -6 V^{-1} \partial_x H & 12 V^{-1}
+    \end{pmatrix}
+\end{align}
+where $    V = (\partial_x H) C (\partial_x H)^\star $. For $k \geq 1$, we define the quasi-likelihood functions corresponding to $\theta_1,\theta_2,\theta_3$ as follows:
+\begin{align} 
+V^{1',k}_n(\theta_1  | \bar{\theta}) &:= \begin{aligned}[t]
+  &  -\frac{1}{2n} \sum_{j=1}^n C^{-1}_{n,j-1}(\theta_1 ) \Big[       (\mathcal{D}_{n,j}^{k-1,x})^{\otimes 2}(\bar{\theta}) -\sum_{l=1}^{k - 1} h_n^l S^{l,xx}  _{n,j-1} (\bar{\theta}) \Big] \\  & -\frac{1}{2n} \sum_{j=1}^n\log \det C_{n,j-1} (\theta_1) ,
+\end{aligned}\\ 
+V^{1,k}_n(\theta_1 | \bar{\theta}) & :=
+\begin{aligned}[t] & -\frac{1}{2n} \sum_{j=1}^n  (S^0)^{-1}_{n,j-1}(\theta_1 ,\bar{\theta}_3) \Big[       (\mathcal{D}_{n,j}^{k -1} )^{\otimes 2}(\bar{\theta})-\sum_{l=1}^{k-1} h_n^l S^l_{n,j-1} (\bar{\theta}) \Big]  \\ & -\frac{1}{2n} \sum_{j=1}^n\log \det S^0_{n,j-1} (\theta_1,\bar{\theta}_3),
+\end{aligned}\\    
+V^{2,k}_n (\theta_2 | \bar{\theta}) &:= -\frac{1}{2nh} \sum_{j=1}^n C^{-1}_{n,j-1} (\bar{\theta}_1)[(\mathcal{D}^{k,x})_{n,j}^{\otimes 2} (\theta_2,\bar{\theta}) ], \\
+   V^{3,k}_n(\theta_3| \bar{\theta}) &:=\begin{aligned}[t]
+       &-\frac{h_n}{2n}\sum_ j 12 V^{-1}_{n,j-1} (\bar{\theta}_1,\bar{\theta}_3)[(\mathcal{D}^{k,y})^{\otimes 2 }_{j} (\theta_3,\bar{\theta})] \\ &+\frac{h_n}{2n} \sum_{j=1}^n 12 ((\partial_x H)^\star V^{-1})_{n,j-1} (\bar{\theta}_1,\bar{\theta}_3)[\mathcal{D}^{k,x}_{n,j}(\bar{\theta}_2,\bar{\theta}) \otimes \mathcal{D}_{n,j}^{k,y}(\theta_3,\bar{\theta}) ].
+   \end{aligned} 
+\end{align}
+We denote by $(i',i)$ an element of the set $\{(1',1),(1,1),(2,2),(3,3)\}$. Let
+\begin{align}
+    a_n & :  = \text{diag}[a_n^1 I_{p_1} ,a_n^2 I_{p_2},a_n^3 I_{p_3} ] \\ & :=\text{diag} \Big[\frac{1}{n^{1/2}} I_{p_1} , \frac{1}{(nh_n)^{1/2}} I_{p_2}, \frac{h_n^{1/2}}{n^{1/2}}  I_{p_3} \Big],
+\end{align}
+where $I_{p_1}$, $I_{p_2}$ and $I_{p_3}$ are identity matrices of dimensions $p_1$, $p_2$ and $p_3$, respectively. Fix some continuous prior distribution ${\pi}_i $ for $\theta_i$ satisfying  $0 < \inf_{\theta_i \in \Theta_i} \pi_i(\theta_i) \leq \sup_{\theta_i \in \Theta_i} \pi_i(\theta_i)<\infty$. For $k \geq 1$ and a $\Theta$-valued measurable function $\hat{\theta}_0  = (\hat{\theta}_{0,1} , \hat{\theta}_{0,2},\hat{\theta}_{0,3}) $, let $\hat{\theta}_{i',n}^{\text{M},k}(\hat{\theta}_0)$ be a $\Theta_i$-valued measurable function such that if $\argmax_{\theta_i \in \Theta_i} V_n^{i',k}(\theta_i | \hat{\theta}_0)$ is not empty, $\hat{\theta}_{i',n}^{\text{M},k}(\hat{\theta}_0) \in \argmax_{\theta_i \in \Theta_i} V_n^{i',k}(\theta_i | \hat{\theta}_0)$ holds. Furthermore, we define two $\Theta_i$-valued measurable functions as
+\begin{align}
+      
+      \hat{\theta}_{i',n} ^{\text{B},k}(\hat{\theta}_0) &:= \frac{\int_{\Theta_i} \theta_i \exp( (a_n^i + h_n^{k + \delta_{i,3} }) ^{-2} V_n^{i',k}(\theta_i| \hat{\theta}_0)) \pi_{i}(\theta_i) d\theta_i }{\int_{\Theta_i} \exp( (a_n^i + h_n^{k + \delta_{i,3} }) ^{-2}V_n^{i',k}(\theta_i| \hat{\theta}_0)) \pi_{i}(\theta_i) d\theta_i}, \\  \hat{\theta}_{i',n} ^{\text{S},k}(\hat{\theta}_0) &:=  \begin{cases}
+            \hat{\theta}_{0,i} - (\partial_{\theta_i}^2 V_n^ {i',k}(\hat{\theta}_{0,i}|\hat{\theta}_0))^{-1}[\partial_{\theta_i} V_n^{i',k}(\hat{\theta}_{0,i}|\hat{\theta}_0) ] & (\in \Theta_i) \\ \hat{\theta}_{0,i} & (\text{otherwise})
+        \end{cases},
+\end{align}
+where $\delta_{i,3} $ is the Kronecker delta. 
+\color{black}
+\begin{remark}
+If $h_n^{k + \delta_{i,3} }/a_n^i  \to 0$ as $n \to \infty$ (which holds for $k \geq k_0$), then $a_n^i + h_n^{k + \delta_{i,3} }$ in the definition of $\hat{\theta}_{i',n} ^{\text{B},k}(\hat{\theta}_0)$ can be replaced by $a_n^i$ without affecting the validity of Theorem \ref{main}. In this case, the estimator coincides with the standard form of the Bayes estimator.
+\end{remark}
+\color{black} Let $ \hat{\theta}^{0,0}_n : =  (\hat{\theta}^{0,0} _{1,n} ,\hat{\theta}^{0,0} _{2,n},\hat{\theta}^{0,0} _{3,n} )  \in \Theta$ be any measurable functions (can be constant) and $\text{A} = (\text{A}_1^{1} ,\text{A}_2^{1},\text{A}_3^{1} ,\text{A}_1^{2} ,\text{A}_2^{2} ,\text{A}_3^{2} ,\cdots) \in \{\text{M},\text{B}\}^3 \times \{\text{M},\text{B},\text{S}\}^{\mathbb{N}} $ .
+For any integer $k \geq 1$, we construct an estimators $\hat{\theta}^{k}_n = (\hat{\theta}_{1,n}^{k}, \hat{\theta}_{2,n}^{k}, \hat{\theta}_{3,n}^{k})$ using the following algorithm:
+\begin{enumerate}
+    \item For $k \geq 1$, define the following estimators inductively:\begin{align}
+         \hat{\theta}^{k,0}_{1,n} &:= \hat{\theta}^{\text{A}_{1}^{k},k }_{1',n}(\hat{\theta}^{k- 1,0}_{1,n} ,\hat{\theta}^{k- 1,0}_{2,n},\hat{\theta}^{k- 1,0}_{3,n} ), \\     \hat{\theta}^{k,0}_{2,n} &:= \hat{\theta}^{\text{A}_{2}^{k},k }_{2,n}(\hat{\theta}^{k,0}_{1,n},\hat{\theta}^{k- 1,0}_{2,n} ,\hat{\theta}^{k- 1,0}_{3,n} ) ,\\    \hat{\theta}^{k,0}_{3,n} &:= \hat{\theta}^{\text{A}_{3}^{k},k }_{3,n}(\hat{\theta}^{k,0}_{1,n},\hat{\theta}^{k,0}_{2,n},\hat{\theta}^{k- 1,0}_{3,n} ), \\ \hat{\theta}^{k,0}_n &: = (   \hat{\theta}^{k,0}_{1,n},\hat{\theta}^{k,0}_{2,n},\hat{\theta}^{k,0}_{3,n} ).
+    \end{align}
+    \item Let\begin{align}
+    \hat{\theta}_{1,n}  ^{k} &:= \hat{\theta}_ {1,n} ^{\text{A}_1^{k +1},k+1}(\hat{\theta}_{1,n} ^{k,0},\hat{\theta}_{2,n} ^{k,0},\hat{\theta}_{3,n} ^{k,0}),\\ \hat{\theta}_{2,n}  ^{k} &: = \hat{\theta}^{k,0}_{2,n} , \\ \hat{\theta}_{3,n} ^{k} &: = \begin{cases}
+        \hat{\theta}_{3,n} ^{k,0}  & k \geq 2 \\ \hat{\theta}_{3,n} ^{\text{A}_3^{2},1 }(\hat{\theta}_{1,n} ^{1,0},\hat{\theta}_{2,n} ^{1,0},\hat{\theta}_{3,n} ^{1,0}) & k =1
+    \end{cases},\\ \hat{\theta}^{k}_n  &: = (\hat{\theta}^{k} _{1,n},\hat{\theta}^{k} _{2,n},\hat{\theta}^{k} _{3,n} ).
+\end{align}
+\end{enumerate}
+% \begin{algorithm}[H]
+%     \caption{Calculate $\hat{\theta} = (\hat{\theta}_1,\hat{\theta}_2,\hat{\theta}_3)$}
+%     \label{alg1}
+% \begin{algorithmic}
+%         \STATE $\hat{\theta} := \theta^0$
+%         \FOR{$k = 1$ \TO $k_0$}
+%             \STATE $\hat{\theta}_1 \gets 
+%                 \begin{cases}
+%                     \hat{\theta}_{1'}^{M,k}(\hat{\theta}) & \text{if using method M} \\
+%                     \hat{\theta}_{1'}^{B,k}(\hat{\theta}; h_n^{k} + \frac{1}{n^{1/2}}) & \text{if using method B} \\
+%                     \hat{\theta}_{1'}^{S,({k})}(\hat{\theta}) & \text{if ${k} \geq 2$, using method S}
+%                 \end{cases}$
+%             \STATE $\hat{\theta}_2 \gets 
+%                 \begin{cases}
+%                     \hat{\theta}_2^{M,({k})}(\hat{\theta}) & \text{if using method M} \\
+%                     \hat{\theta}_2^{B,({k})}(\hat{\theta}; h_n^{k} + \frac{1}{(nh_n)^{1/2}}) & \text{if using method B} \\
+%                     \hat{\theta}_2^{S,({k})}(\hat{\theta}) & \text{if ${k} \geq 2$, using method S}
+%                 \end{cases}$
+%             \STATE $\hat{\theta}_3 \gets 
+%                 \begin{cases}
+%                     \hat{\theta}_3^{M,({k})}(\hat{\theta}) & \text{if using method M} \\
+%                     \hat{\theta}_3^{B,({k})}(\hat{\theta}; h_n^{{k}+1} + \frac{h_n^{1/2}}{n^{1/2}}) & \text{if using method B} \\
+%                     \hat{\theta}_3^{S,({k})}(\hat{\theta}) & \text{if ${k} \geq 2$, using method S}
+%                 \end{cases}$
+%         \ENDFOR
+%         \STATE $\hat{\theta}_1 \gets
+%         \begin{cases}
+%                     \hat{\theta}_{1}^{M,(k_0+1)}(\hat{\theta}) & \text{if using method M} \\
+%                     \hat{\theta}_{1}^{B,(k_0+1)}(\hat{\theta}; h_n^{k_0+1} + \frac{1}{n^{1/2}}) & \text{if using method B} \\
+%                     \hat{\theta}_{1}^{S,(k_0+1)}(\hat{\theta}) & \text{if using method S}
+%                 \end{cases}$
+%    \IF{$k_0 =1$}
+%             \STATE $\hat{\theta}_3 \gets 
+%                 \begin{cases}
+%                     \hat{\theta}_3^{M,1}(\hat{\theta}) & \text{if using method M} \\
+%                     \hat{\theta}_3^{B,k_0}(\hat{\theta}; h_n^{k_0+1} + \frac{h_n^{1/2}}{n^{1/2}}) & \text{if using method B} \\
+%                     \hat{\theta}_3^{S,k_0}(\hat{\theta}) & \text{if using method S}
+%                 \end{cases}$
+%     \ENDIF
+%     \RETURN $\hat{\theta}$
+%     \end{algorithmic}
+% \end{algorithm}
+% The curly brackets mean that any of the options can be chosen. 
+
+Let
+\begin{align}
+\Gamma^{1'}(\theta_1) &  :=  \frac{1}{2} \int
+        \Tr\Bigl( C^{-1}(\partial_{\theta_1}C)C^{-1}(\partial_{\theta_1}C)(z,\theta_1)\Bigr)  \nu^*(dz), \\ 
+    \Gamma^{1}(\theta_1|\bar{\theta}_3) &: = \Gamma^{1'}(\theta_1) + \frac{1}{2} \int  \Tr\Bigl( V^{-1}(\partial_{\theta_1}V) V^{-1} (\partial_{\theta_1} V )(z,\theta_1,\bar{\theta}_3)\Bigr)\nu^*(dz),
+    \\
+    \Gamma^{2}(\theta_2| \bar{\theta}_1) & := \int C^{-1}(z,\bar{\theta}_1)[(\partial_{\theta_2}A)^{\otimes 2}(z,{\theta}_2) ] \nu^*(dz),
+    \\
+    \Gamma^{3}(\theta_3|\bar{\theta}_1,\bar{\theta}_3) & := \int 12V^{-1}(z,\bar{\theta}_1,\bar{\theta}_3)[(\partial_{\theta_3} H)^{\otimes 2}(z,\theta_3) ] \nu^*(dz)
+\end{align}
+and $\Gamma:= \diag[\Gamma^1(\theta_1^*|\theta_3^*),\Gamma^2(\theta_2^*|\theta_1^*),\Gamma^3(\theta_3^*|\theta_1^*,\theta_3^*)] $. We denote the expectation with respect to $N(0,\Gamma^{-1})$ by $\mathbb{E}$. 
+
+
+\begin{theorem}\label{main}
+The convergence
+\begin{align}
+    E[f(a_n^{-1}( \hat{\theta  }_n^{k_0  }  - \theta^*) )] \to \mathbb{E}[f]
+\end{align}
+holds as $n $ tends to $\infty$ for all $f\in C_\uparrow$.
+\end{theorem}
+
+The proof of Theorem \ref{main} will be given in Section 6.
+\begin{remark}
+    If $\text{A}_3^k \in \{\text{M},\text{B} \} $ for any $k \geq 1$, the regularity assumption on $H$ in [A4] can be relaxed to $H \in C^{p+1,2}_\uparrow(\mathbb{R}^{d_z} \times \Theta_3 ;\mathbb{R}^{d_y})$.
+\end{remark}
+
+
+% \begin{proof}[Proof of \cref{main}]
+%     証明は同様なので，$\hat{\theta} = \hat{\theta}^J$ に対してのみ示す．$\hat{\delta}_i := |\hat{\theta}_i - \theta^*_i|$とする．QLAを $\hat{\theta}^{(n)} $を構成した順番で用いる．Proposition \cref{taihen}の1より，$\hat{\delta}_3= O_{L^{\infty \text{-}}}( (\frac{h_n}{n})^{1/2}+ h_n)$ がわかる($nh_n^2 \to 0$ の時と同様)．これより，Propostion \cref{taihen}の2を用いると $\hat{\delta}_2 = O_{L^{\infty \text{-}}}(n^{-1/2}+ h_n^{1/2})$がわかり，1に立ち戻ると $\hat{\delta}_3 = O_{L^{\infty \text{-}}}(\frac{h_n}{n})^{1/2}+ h_n^{3/2} ) $ がわかる．次に3を用いると $\hat{\delta}_2 = O_P(\frac{1}{(nh_n)^{1/2} } + h_n^{1/2} ) $ である．
+% ここまでに得られた $\hat{\delta}_l$の評価を用いるとPropostion \cref{taihen}の bを以下のように書き直すことができる:
+% \begin{align}
+%  & \partial_{\theta_2} \mathbb{Y}_n^2 (\theta^*_2|\hat{\theta}_1,\hat{\theta}_3)  = O_{L^{\infty \text{-}}}\Big(\frac{1}{(nh_n)^{1/2}} + h_n^{\frac{p-1}{2}} + \hat{\delta}_1 + h_n^{-1/2} \hat{\delta}_3\Big), \\ 
+%     &\partial_{\theta_3} \mathbb{Y}_n^3(\theta_3^*|\hat{\theta}_1,\hat{\theta}_2) = O_{L^{\infty \text{-}}}\Big(\Big(\frac{h_n}{n}\Big)^{1/2} + h_n^{\frac{p+1}{2}} + h_n \hat{\delta}_1 + h_n^{3/2}\hat {\delta}_2\Big), \\ & \partial_{\theta_1}\mathbb{Y}_n^1(\theta_1^*|\hat{\theta}_2,\hat{\theta}_3) = O_{L^{\infty \text{-}}}\Big(\frac{1}{n^{1/2} } + h_n^{\frac{p+1}{2}} +h_n^{1/2} \hat{\delta_2} + h_n^{-1/2}\hat{\delta}_3 \Big).
+% \end{align}
+% この式をサイクリックに用いることにより，$\partial_{\theta_2} \mathbb{Y}_n^2(\theta^*_2|\hat{\theta}_1,\hat{\theta}_3),\partial_{\theta_3} \mathbb{Y}_n^3(\theta_3^*|\hat{\theta}_1,\hat{\theta}_2),\partial_{\theta_1}\mathbb{Y}_n^1(\theta^*_1|\hat{\theta}_2,\hat{\theta}_3)$の微小項のorderはそれぞれ$h_n^{(p-1)/2},h_n^{(p+1)/2},h_n^{p/2} $ であることがわかる．
+% 然るに，$nh_n^{p} \to 0 $ であれば主張がQLA，Proposition \cref{taihen}，Proposition \cref{taihen2}より成立する．
+% \end{proof}
+
+\end{document}

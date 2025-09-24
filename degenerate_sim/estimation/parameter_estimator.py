@@ -11,6 +11,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from numpyro import infer
+from numpyro.distributions import transforms
 
 Bounds = Sequence[tuple[float | None, float | None]]
 Array1D = jnp.ndarray
@@ -47,11 +48,16 @@ def m_estimate(
     search_bounds: Bounds,
     initial_guess: Sequence[float],
     *,
-    learning_rate: float = 1e-2,
+    learning_rate: float = 1e-3,
     max_iters: int = 1000,
     tol: float = 1e-6,
+    log_interval: int | None = None,
 ) -> np.ndarray:
-    """Gradient-ascent M-estimation implemented with JAX."""
+    """Gradient-ascent M-estimation implemented with JAX.
+
+    The ``learning_rate`` の既定値を ``1e-3`` に下げ、必要に応じて ``log_interval``（反復回数）で
+    勾配ノルムと現在の θ をログ表示できるようにした。
+    """
     bounds = _normalize_bounds(search_bounds)
     theta0 = jnp.asarray(initial_guess, dtype=jnp.float64)
 
@@ -69,9 +75,13 @@ def m_estimate(
 
     theta_opt = theta0
     grad_norm_value = float("inf")
-    for _ in range(max_iters):
+    for iteration in range(1, max_iters + 1):
         theta_opt, grad_norm = step(theta_opt)
         grad_norm_value = float(grad_norm)
+        if log_interval and iteration % log_interval == 0:
+            print(
+                f"[m_estimate] iter={iteration} grad_norm={grad_norm_value:.3e} theta={theta_opt}"
+            )
         if grad_norm_value <= tol:
             break
 
@@ -100,6 +110,53 @@ def one_step_estimate(
     theta_new = theta0 - delta
     theta_new = _clip(theta_new, bounds)
     return np.asarray(theta_new)
+
+
+def newton_solve(
+    objective_function: Callable[[Array1D], float],
+    search_bounds: Bounds,
+    initial_guess: Sequence[float],
+    *,
+    max_iters: int = 50,
+    tol: float = 1e-6,
+    damping: float = 1.0,
+    log_interval: int | None = None,
+) -> np.ndarray:
+    """多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。
+
+    ``damping`` を 1 未満にすると過大ステップを抑えられる。解が境界の外に出そうな場合でも
+    ``_clip`` で常に ``search_bounds`` 内に戻す。
+    """
+
+    bounds = _normalize_bounds(search_bounds)
+    theta = jnp.asarray(initial_guess, dtype=jnp.float64)
+    if theta.shape != (bounds.shape[0],):
+        msg = f"initial_guess must have shape ({bounds.shape[0]},)."
+        raise ValueError(msg)
+
+    def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
+        grad_val = jax.grad(objective_function)(theta_val)
+        hessian_val = jax.hessian(objective_function)(theta_val)
+        return grad_val, hessian_val
+
+    for iteration in range(1, max_iters + 1):
+        grad_val, hessian_val = grad_and_hessian(theta)
+        grad_norm = float(jnp.linalg.norm(grad_val))
+        if log_interval and iteration % log_interval == 0:
+            print(
+                f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}"
+            )
+        if grad_norm <= tol:
+            break
+
+        eye = jnp.eye(theta.shape[0])
+        # 解析的に非正定な Hessian でも解けるように微小対角成分を加える。
+        hessian_safe = hessian_val + 1e-6 * eye
+        delta = jnp.linalg.solve(hessian_safe, grad_val)
+        theta = theta - damping * delta
+        theta = _clip(theta, bounds)
+
+    return np.asarray(theta)
 
 
 def _prior_from_bounds(low: float, high: float) -> dist.Distribution:
@@ -168,6 +225,7 @@ def bayes_estimate(
 
 __all__ = [
     "bayes_estimate",
+    "newton_solve",
     "m_estimate",
     "one_step_estimate",
 ]

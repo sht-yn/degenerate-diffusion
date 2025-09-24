@@ -82,6 +82,8 @@ class DegenerateDiffusionProcess:
         self.y.shape[0]
         r = self.B.shape[1]
 
+        dt_array = jnp.asarray(dt, dtype=theta_1_val.dtype)
+
         def em_step(carry, _):
             xt, yt, current_key = carry
             key_dW, next_key_for_loop = jax.random.split(current_key)
@@ -90,11 +92,11 @@ class DegenerateDiffusionProcess:
             B_val = self.B_func(xt, yt, theta_1_val)
             H_val = self.H_func(xt, yt, theta_3_val)
 
-            dW = jax.random.normal(key_dW, (r,)) * jnp.sqrt(dt)
+            dW = jax.random.normal(key_dW, (r,), dtype=theta_1_val.dtype) * jnp.sqrt(dt_array)
             diffusion_term = jnp.dot(B_val, dW)
 
-            xt_next = xt + A_val * dt + diffusion_term
-            yt_next = yt + H_val * dt
+            xt_next = xt + A_val * dt_array + diffusion_term
+            yt_next = yt + H_val * dt_array
 
             return (xt_next, yt_next, next_key_for_loop), (xt_next, yt_next)
 
@@ -154,21 +156,31 @@ class DegenerateDiffusionProcess:
 
         theta_1, theta_2, theta_3 = true_theta
 
+        theta_1_jnp = jnp.asarray(theta_1)
+        theta_2_jnp = jnp.asarray(theta_2)
+        theta_3_jnp = jnp.asarray(theta_3)
+
+        target_dtype = jnp.result_type(theta_1_jnp, theta_2_jnp, theta_3_jnp)
+
+        theta_1_jnp = theta_1_jnp.astype(target_dtype)
+        theta_2_jnp = theta_2_jnp.astype(target_dtype)
+        theta_3_jnp = theta_3_jnp.astype(target_dtype)
+
         x0_jnp = (
-            jnp.zeros((d_x,), dtype=jnp.float32)
+            jnp.zeros((d_x,), dtype=target_dtype)
             if x0 is None
-            else jnp.reshape(jnp.asarray(x0, dtype=jnp.float32), (d_x,))
+            else jnp.reshape(jnp.asarray(x0, dtype=target_dtype), (d_x,))
         )
         y0_jnp = (
-            jnp.zeros((d_y,), dtype=jnp.float32)
+            jnp.zeros((d_y,), dtype=target_dtype)
             if y0 is None
-            else jnp.reshape(jnp.asarray(y0, dtype=jnp.float32), (d_y,))
+            else jnp.reshape(jnp.asarray(y0, dtype=target_dtype), (d_y,))
         )
 
         x_series_jax, y_series_jax = self._simulate_jax_core(
-            theta_1,
-            theta_2,
-            theta_3,
+            theta_1_jnp,
+            theta_2_jnp,
+            theta_3_jnp,
             key,
             t_max,
             burn_out,

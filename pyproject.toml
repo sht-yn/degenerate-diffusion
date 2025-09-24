@@ -185,3 +185,11 @@ dependencies = [
     "xarray-einstats>=0.9.1",
     "zipp>=3.23.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["degenerate_sim*"]
+exclude = ["old*", "__pycache__"]
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"

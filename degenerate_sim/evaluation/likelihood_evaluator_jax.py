@@ -24,10 +24,10 @@ from sympy import (
 )
 from sympy.matrices.common import NonInvertibleMatrixError
 
-from ..utils.einsum_sympy import einsum_sympy
+from degenerate_sim.utils.einsum_sympy import einsum_sympy
 
 if TYPE_CHECKING:
-    from ..processes.degenerate_diffusion_process_jax import DegenerateDiffusionProcess
+    from degenerate_sim.processes.degenerate_diffusion_process_jax import DegenerateDiffusionProcess
 
 # --- 定数 ---
 INVALID_SREPR_KEY = "invalid_sympy_srepr"

@@ -1,0 +1,26 @@
+# Fdb version 4
+["dvipdf"] 0 "out/introduction_English.dvi" "out/introduction_English.pdf" "out/introduction_English" 0 -1
+  "out/introduction_English.dvi" 0 -1 0 "latex"
+  (generated)
+  "out/introduction_English.pdf"
+  (rewritten before read)
+["latex"] 1758733343 "/Users/yanoshouta/dev/simulation/introduction_English.tex" "out/introduction_English.dvi" "introduction_English" 1758733343 2
+  "/Users/yanoshouta/dev/simulation/introduction_English.tex" 1758733342 7828 6eca6797442a9b82fd493ccc8c74e3b8 ""
+  "/usr/local/texlive/2023/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
+  "/usr/local/texlive/2023/texmf-dist/fonts/tfm/ptex-fonts/jis/jis.tfm" 1463434352 468 53f854284f6afa6c36aaa2d1090ecc12 ""
+  "/usr/local/texlive/2023/texmf-dist/fonts/tfm/ptex-fonts/standard/tmin10.tfm" 1463434352 856 39c171483fe1bb7d0e1368980c0c205b ""
+  "/usr/local/texlive/2023/texmf-dist/fonts/tfm/public/cm/cmr8.tfm" 1136768653 1292 21c1c5bfeaebccffdb478fd231a0997d ""
+  "/usr/local/texlive/2023/texmf-dist/tex/platex/jsclasses/jsarticle.cls" 1677186565 61387 1c16fa09f9aa344f6b7ed4a7e2c399b2 ""
+  "/usr/local/texlive/2023/texmf-dist/tex/platex/jsclasses/jslogo.sty" 1601931076 5585 8e4615c54073c390d14154b29cee89cb ""
+  "/usr/local/texlive/2023/texmf-dist/web2c/texmf.cnf" 1677365944 40745 87bb86a62d462f93a1efc6b0c65c872e ""
+  "/usr/local/texlive/2023/texmf-var/web2c/eptex/platex.fmt" 1702551480 7883686 f00d5d28f2c18b6ff66083ce098c8bd1 ""
+  "/usr/local/texlive/2023/texmf.cnf" 1678822455 577 1b2b1af17af2508fb20dd85783af4050 ""
+  "introduction_English.tex" 1758733342 7828 6eca6797442a9b82fd493ccc8c74e3b8 ""
+  "out/introduction_English.aux" 1758733343 32 3985256e7290058c681f74d7a3565a19 "latex"
+  "out/yano.sty" 0 -1 0 ""
+  "yano.sty" 0 -1 0 ""
+  (generated)
+  "out/introduction_English.aux"
+  "out/introduction_English.dvi"
+  "out/introduction_English.log"
+  (rewritten before read)

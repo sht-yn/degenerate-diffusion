@@ -1,0 +1,104 @@
+\documentclass[a4paper,11pt]{jsarticle}
+\usepackage{yano}
+\usepackage{leftindex}
+\begin{document}
+\section{Notations and Assumptions}
+Let $\alpha_n, \beta_n$ be sequences of positive real numbers. We say $\alpha_n \Bumpeq	 \beta_n$ if there exist some $\epsilon, \mathcal{E}, c, C > 0$ such that for all $n$:
+\begin{align}
+c\alpha_n^{\mathcal{E}} \leq \beta_n \leq C\alpha_n^\epsilon.
+\end{align}
+This forms an equivalence relation. From the definition, it's clear that $\alpha_n^\epsilon \Bumpeq	 \alpha_n$. Furthermore, when $\alpha_n \Bumpeq \beta_n$, we have:
+\begin{align}
+(\alpha_n + \beta_n)^\epsilon \leq 2^\epsilon \alpha_n^\epsilon + 2^\epsilon \beta_n^\epsilon.
+\end{align}
+Therefore, $\alpha_n + \beta_n\Bumpeq	 \alpha_n$. Also, for any $c > 0$, it's clear that $c\alpha_n \Bumpeq	 \alpha_n$. In other words, the equivalence classes under $\sim$ form a convex cone. They are also closed under multiplication. 
+Let $ p$ be some integer larger than or equal to 2 and we denote $\lfloor p/2 \rfloor $ by $k_0$.
+Hereafter, we assume [A1]-[A5] below. 
+   \begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]
+    \item    $h_n \to 0,nh_n \to \infty,nh_n^p \to 0$ and there exists $\epsilon>0$ such that $n^\epsilon \leq nh_n$
+\end{enumerate}
+Assuming [A1], we note that for sufficiently large $n$:
+$n^\epsilon \leq nh_n \leq n$ and $h_n^p \leq \frac{1}{n} \leq h_n$. Therefore
+\begin{align}
+h_n \Bumpeq	 \frac{1}{n}\Bumpeq	\frac{1}{nh_n}\Bumpeq	\frac{h_n}{n}
+\end{align}
+holds.
+
+    \begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]\setcounter{enumi}{1}
+    \item  For any $M >0$,\begin{align}
+      \sup_{t \in \mathbb{R}_+ } E[|Z_t|^M ]< \infty.
+  \end{align}
+\end{enumerate}
+We denote the set of all polynomial growth continuous function on $\mathbb{R}^{d_Z} $ by $C_\uparrow(\mathbb{R}^{d_Z}) $.
+    \begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]\setcounter{enumi}{2}
+    \item There exists a probability measure $\nu^*$ on $\mathbb{R}^{d_z} $ and $\epsilon >0$ such that \begin{align}
+\sup_n     E\left[\left(\frac{\left| \frac{1}{nh_n}\int_0^{nh_n} f(Z_t) \,dt - \int_{\mathbb{R}^{d_z} } f(z) \,d\nu^*(x)\right| }{\frac{1}{(nh_n)^\epsilon }} \right)^M  \right]< \infty
+\end{align}
+for all $M>0$ and $f \in C_\uparrow(\mathbb{R}^{d_z}) $.
+\end{enumerate}
+
+
+Let $E,F$ be finite-dimensional vector spaces and $U$ a bounded open subset of some Euclidean space. We define two function spaces:
+
+\begin{enumerate}
+    \item $C^{m}_\uparrow(E;F)$ is the set of all functions $f: E \ni z \mapsto f(z) \in F$ such that for all $m' \in \mathbb{Z}$ satisfying $0 \leq m' \leq m$, the derivative $\partial_z^{m'} f$ is defined as a continuous function on $E$ and of at most polynomial growth in $z$.
+    \item $C_\uparrow^{m,l}(E \times U ;F)$ is the set of all functions $f: E\times U \ni (z,u) \mapsto f(z,u) \in F$ such that for $m',l' \in \mathbb{Z}$ satisfying $0 \leq m' \leq m $ and $0 \leq l' \leq l$, the derivatives $\partial_z^{m'} \partial_u^{l'} f$ are defined as a continuous function on $E \times \bar{U}$ and of at most polynomial growth in $z$ uniformly in $u$.
+\end{enumerate}
+ When the domain and codomain of a given function are clear from the context, we may abbreviate $f \in C_\uparrow^{m,l}(E \times U;F)$ as $f \in C_\uparrow^{m,l}$ and $f \in C^m_\uparrow(E;F)$ as $f \in C^m_\uparrow$.
+
+
+\begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]\setcounter{enumi}{3}
+    \item  $A \in C_\uparrow^{p-1,3 }(\mathbb{R}^{d_z} \times \Theta_2 ; \mathbb{R}^{d_x}),B \in C_\uparrow^{p,3}( \mathbb{R}^{d_z} \times \Theta_1; \mathbb{R}^{d_x} \otimes \mathbb{R}^r)$ \\and $H \in C_\uparrow^{p+1,3}(\mathbb{R}^{d_z} \times \Theta_3; \mathbb{R}^{d_y})$.\label{a2} 
+\end{enumerate}
+Let $C := B B^{\star}$ and $V := (\partial_x H )C (\partial_x H)^{\star}$, where $\star$ denotes the transpose.
+\begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]\setcounter{enumi}{4}
+    \item $\inf_{(z,\theta_1) \in \mathbb{R}^{d_z} \times \Theta_1 } \det C(z,\theta_1)>0$ and $\inf_{(z,\theta_1,\theta_3) \in \mathbb{R}^{d_z} \times \Theta_1 \times \Theta_3 }\det V(z,\theta_1,\theta_3)  >0 $.
+\end{enumerate}
+
+Let
+\begin{align} &\mathbb{Y}^{1'}(\theta_1) :=  - \frac{1}{2} \int \Big(\Tr\big(C^{-1}(z,\theta_1)C(z,\theta^*_1) \big) -d_x + \log \frac{\det C(z,\theta_1) }{\det C(z,\theta_1^*)} \Big)d \nu^*(z),\\
+    &\mathbb{Y}^1(\theta_1)  :=\\&  -\frac{1}{2}\bigints \left(\begin{aligned}
+       & \Tr\big(C^{-1}(z,\theta_1)C(z,\theta^*_1) \big)+ \Tr\big(V^{-1}(z,\theta_1,\theta_3^*)V(z,\theta_1^*,\theta_3^*)\big) -d_z \\  &+ \log \frac{\det C(z,\theta_1) \det V(\theta_1,\theta_3^*) }{\det C(z,\theta_1^*) \det V(\theta^*_1,\theta_3^*)}
+    \end{aligned} \right) \,d\nu^*(z), \\&\mathbb{Y}^2(\theta_2) := -\frac{1}{2}\int C^{-1}(z,\theta_1^*)\big[\big(A(z,\theta_2) - A(z,\theta_2^*)\big)^{\otimes 2} \big] \nu^*(dz),
+    \\ & \mathbb{Y}^3(\theta_3| \bar{\theta}_3)   := - \int 6V^{-1}(z, \theta_1^*,\bar{\theta}_3) \big[\big(H(z,\theta_3) - H(z,\theta_3^*)\big)^{\otimes 2} \big] d \nu^*(z),
+\end{align}
+where $\bar{\theta} = (\bar{\theta}_1,\bar{\theta}_2,\bar{\theta}_3)$ is a variable moving in $\Theta$.
+\begin{enumerate}[label = {[{A\arabic*}]},ref=  {[{A\arabic*}]}]\setcounter{enumi}{5}
+    \item There exists $\epsilon>0$ such that the following inequalities hold
+    \begin{enumerate}[label = (\textbf{\roman*})]
+        \item $\mathbb{Y}^{1'} (\theta_1) \leq  -\epsilon|\theta_1 - \theta_1^*|^2 $ for all $\theta_1 \in \Theta_1$.
+        \item $\mathbb{Y}^1(\theta_1) \leq  -\epsilon|\theta_1 - \theta_1^*|^2 $ for all $\theta_1 \in \Theta_1$.
+        \item $\mathbb{Y}^2(\theta_2 ) \leq -\epsilon|\theta_2 - \theta_2^*|^2 $ for all $\theta_2 \in \Theta_2$.
+        \item  $\mathbb{Y}^3(\theta_3 | \bar{\theta}_3) \leq - \epsilon|\theta_3 - \theta_3^*|^2 $ for all $\theta_3,\bar{\theta}_3 \in \Theta_3$.
+    \end{enumerate}
+\end{enumerate}
+
+
+Let $f(u,v)$ be a function defined on some direct product set to $\mathbb{R}$. We denote $f(u,v) - f(u',v)$ by $f(u\backslash u',v)$. For example, $f(z,\theta_1,\theta_2 \backslash \theta_2^*,\theta_3) = f(z,\theta_1,\theta_2,\theta_3) - f(z,\theta_1,\theta_2^*,\theta_3)$. 
+
+
+Given a function $f(z,\boldsymbol{\theta})$ on $\mathbb{R}^{d_z} \times \Theta^2$, we write $f_{n,j}(\boldsymbol{\theta}) = f(Z_{t_{n,j}},\boldsymbol{\theta})$ and we use simplified notations: $Z_{n,j} = Z_{t_{n,j}}$, $X_{n,j} = X_{t_{n,j}}$, $Y_{n,j} = Y_{t_{n,j}}$ and $E_{n,j}[ \cdot] = E[\cdot | \mathcal{F}_{t_{n,j}} ]$. 
+
+
+We denote the tensor inner product by $\mathcal{A}[\mathcal{B}]$ or $\mathcal{A} \cdot \mathcal{B}$. For instance,
+\begin{align}
+C[(X_{n,j}  - X_{n,j-1} )^{\otimes 2} ] = \sum_{l,m} C_{l,m} (X_{n,j} - X_{n,j-1})_l (X_{n,j} - X_{{n,j-1}})_m,
+\end{align}where $C_{l,m} $ is the $(l,m)$-component of $C$ and $(X_{n,j} - X_{n,j-1})_l $ is the $l$-component of $(X_{n,j} -X_{n,j-1}) $, respectively. The symmetrized tensor product is defined as
+\begin{align}
+\mathcal{A} \odot \mathcal{B} =\frac{1}{2} (\mathcal{A} \otimes \mathcal{B} + \mathcal{B} \otimes \mathcal{A}).
+\end{align}
+
+
+Let $f(z,\theta) = f(x,y,\theta)$ be a $C^2$ function on $\mathbb{R}^{d_z} \times \Theta$. We define the operator $L$ by
+\begin{align}
+& Lf(z,\theta) = A(z,\theta_2) \cdot \partial_x f(z,\theta) + H(z,\theta_3) \cdot \partial_y f(z,\theta) + \frac{1}{2} C(z,\theta_1) \cdot \partial_x^2 f(z,\theta)
+\end{align}
+and set
+\begin{align}
+    L^l_0 f = \begin{cases}
+      L^l f / l! & (l \geq 0) \\  0 & (l <0)
+    \end{cases}.
+\end{align}
+for sufficiently smooth functions $f$ and integers $l$.
+
+\end{document}
