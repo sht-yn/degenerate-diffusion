@@ -116,16 +116,15 @@ class DegenerateDiffusionProcess:
 
     def simulate(
         self,
-        true_theta: tuple[np.ndarray, np.ndarray, np.ndarray],
+        true_theta: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
         t_max: float,
         h: float,
         burn_out: float,
         seed: int = 42,
-        x0: np.ndarray | None = None,
-        y0: np.ndarray | None = None,
+        x0: np.ndarray | jnp.ndarray | None = None,
+        y0: np.ndarray | jnp.ndarray | None = None,
         dt: float = 0.001,
-        output_dtype: str = "numpy",  # numpy or jax
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         if dt <= 0:
             msg = "dt must be positive."
             raise ValueError(msg)
@@ -141,7 +140,8 @@ class DegenerateDiffusionProcess:
 
         if not np.isclose(h % dt, 0, atol=1e-8) and not np.isclose(h % dt, dt, atol=1e-8):
             print(
-                f"Warning: h ({h}) is not an integer multiple of dt ({dt}). Thinning interval might be slightly inaccurate due to rounding."
+                f"Warning: h ({h}) is not an integer multiple of dt ({dt}). "
+                "Thinning interval might be slightly inaccurate due to rounding."
             )
 
         step_stride_float_py = h / dt
@@ -152,20 +152,23 @@ class DegenerateDiffusionProcess:
         d_x = self.x.shape[0]
         d_y = self.y.shape[0]
 
-        theta_1_jnp, theta_2_jnp, theta_3_jnp = [
-            jnp.asarray(th, dtype=jnp.float32) for th in true_theta
-        ]
+        theta_1, theta_2, theta_3 = true_theta
 
-        _x0_np = np.zeros(d_x, dtype=np.float32) if x0 is None else np.asarray(x0, dtype=np.float32)
-        _y0_np = np.zeros(d_y, dtype=np.float32) if y0 is None else np.asarray(y0, dtype=np.float32)
-
-        x0_jnp = jnp.reshape(_x0_np, (d_x,))
-        y0_jnp = jnp.reshape(_y0_np, (d_y,))
+        x0_jnp = (
+            jnp.zeros((d_x,), dtype=jnp.float32)
+            if x0 is None
+            else jnp.reshape(jnp.asarray(x0, dtype=jnp.float32), (d_x,))
+        )
+        y0_jnp = (
+            jnp.zeros((d_y,), dtype=jnp.float32)
+            if y0 is None
+            else jnp.reshape(jnp.asarray(y0, dtype=jnp.float32), (d_y,))
+        )
 
         x_series_jax, y_series_jax = self._simulate_jax_core(
-            theta_1_jnp,
-            theta_2_jnp,
-            theta_3_jnp,
+            theta_1,
+            theta_2,
+            theta_3,
             key,
             t_max,
             burn_out,
@@ -174,12 +177,7 @@ class DegenerateDiffusionProcess:
             dt,
             step_stride_py,
         )
-
-        if output_dtype == "jax":
-            return x_series_jax, y_series_jax
-        if output_dtype == "numpy":
-            return np.array(x_series_jax), np.array(y_series_jax)
-        return None
+        return x_series_jax, y_series_jax
 
 
 # %%
@@ -205,9 +203,9 @@ if __name__ == "__main__":
         H=H_expr,
     )
     # %%
-    true_sigma = np.array([0.5])
-    true_kappa = np.array([1.0])
-    true_mu_y = np.array([0.2])
+    true_sigma = jnp.array([0.5], dtype=jnp.float32)
+    true_kappa = jnp.array([1.0], dtype=jnp.float32)
+    true_mu_y = jnp.array([0.2], dtype=jnp.float32)
     true_thetas = (true_sigma, true_kappa, true_mu_y)
 
     T_MAX = 100.0
@@ -231,10 +229,9 @@ if __name__ == "__main__":
             h=current_h_step,
             burn_out=BURN_OUT,
             dt=DT_SIM,
-            x0=np.array([0.0]),
-            y0=np.array([0.0]),
+            x0=jnp.array([0.0], dtype=jnp.float32),
+            y0=jnp.array([0.0], dtype=jnp.float32),
             seed=1 + i,
-            output_dtype="numpy",  # "jax" or "numpy"
         )
         print(
             f"Simulation finished for T_MAX = {current_t_max}, H_STEP = {current_h_step}. Generated data shapes:"
@@ -250,12 +247,12 @@ if __name__ == "__main__":
 
                 fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
 
-                ax[0].plot(time_axis, x_data[:, 0], label=f"{x_sym[0]!s} (Simulated)")
+                ax[0].plot(time_axis, np.asarray(x_data)[:, 0], label=f"{x_sym[0]!s} (Simulated)")
                 ax[0].set_ylabel(f"State {x_sym[0]!s}")
                 ax[0].grid(True)
                 ax[0].legend()
 
-                ax[1].plot(time_axis, y_data[:, 0], label=f"{y_sym[0]!s} (Simulated)")
+                ax[1].plot(time_axis, np.asarray(y_data)[:, 0], label=f"{y_sym[0]!s} (Simulated)")
                 ax[1].set_xlabel("Time")
                 ax[1].set_ylabel(f"Observation {y_sym[0]!s}")
                 ax[1].grid(True)
