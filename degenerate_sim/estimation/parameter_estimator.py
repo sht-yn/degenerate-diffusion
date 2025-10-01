@@ -34,7 +34,7 @@ def _normalize_bounds(search_bounds: Bounds) -> jnp.ndarray:
             msg = f"Lower bound {low_f} exceeds upper bound {high_f} at index {idx}."
             raise ValueError(msg)
         bounds_list.append((low_f, high_f))
-    return jnp.asarray(bounds_list, dtype=jnp.float64)
+    return jnp.asarray(bounds_list)
 
 
 def _clip(theta: Array1D, bounds: jnp.ndarray) -> Array1D:
@@ -58,12 +58,14 @@ def m_estimate(
     The ``learning_rate`` の既定値を ``1e-3`` に下げ、必要に応じて ``log_interval``（反復回数）で
     勾配ノルムと現在の θ をログ表示できるようにした。
     """
-    bounds = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess, dtype=jnp.float64)
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta0 = jnp.asarray(initial_guess)
 
-    if theta0.shape != (bounds.shape[0],):
-        msg = f"initial_guess must have shape ({bounds.shape[0]},)."
+    if theta0.shape != (bounds_raw.shape[0],):
+        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
         raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta0.dtype)
 
     @jax.jit
     def step(theta: Array1D) -> tuple[Array1D, jnp.ndarray]:
@@ -94,12 +96,14 @@ def one_step_estimate(
     initial_estimator: Sequence[float],
 ) -> np.ndarray:
     """Single Newton step using JAX gradients and Hessians."""
-    bounds = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_estimator, dtype=jnp.float64)
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta0 = jnp.asarray(initial_estimator)
 
-    if theta0.shape != (bounds.shape[0],):
-        msg = f"initial_estimator must have shape ({bounds.shape[0]},)."
+    if theta0.shape != (bounds_raw.shape[0],):
+        msg = f"initial_estimator must have shape ({bounds_raw.shape[0]},)."
         raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta0.dtype)
 
     grad = jax.grad(objective_function)(theta0)
     hessian = jax.hessian(objective_function)(theta0)
@@ -127,12 +131,13 @@ def newton_solve(
     ``damping`` を 1 未満にすると過大ステップを抑えられる。解が境界の外に出そうな場合でも
     ``_clip`` で常に ``search_bounds`` 内に戻す。
     """
-
-    bounds = _normalize_bounds(search_bounds)
-    theta = jnp.asarray(initial_guess, dtype=jnp.float64)
-    if theta.shape != (bounds.shape[0],):
-        msg = f"initial_guess must have shape ({bounds.shape[0]},)."
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta = jnp.asarray(initial_guess)
+    if theta.shape != (bounds_raw.shape[0],):
+        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
         raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta.dtype)
 
     def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
         grad_val = jax.grad(objective_function)(theta_val)
@@ -143,9 +148,7 @@ def newton_solve(
         grad_val, hessian_val = grad_and_hessian(theta)
         grad_norm = float(jnp.linalg.norm(grad_val))
         if log_interval and iteration % log_interval == 0:
-            print(
-                f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}"
-            )
+            print(f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}")
         if grad_norm <= tol:
             break
 
@@ -186,13 +189,14 @@ def bayes_estimate(
     rng_seed: int = 0,
 ) -> np.ndarray:
     """Bayesian estimation via NumPyro and JAX."""
-    bounds = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess, dtype=jnp.float64)
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta0 = jnp.asarray(initial_guess)
 
-    if theta0.shape != (bounds.shape[0],):
-        msg = f"initial_guess must have shape ({bounds.shape[0]},)."
+    if theta0.shape != (bounds_raw.shape[0],):
+        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
         raise ValueError(msg)
 
+    bounds = bounds_raw.astype(theta0.dtype)
     bounds_np = np.asarray(bounds)
 
     def model():
@@ -225,7 +229,7 @@ def bayes_estimate(
 
 __all__ = [
     "bayes_estimate",
-    "newton_solve",
     "m_estimate",
+    "newton_solve",
     "one_step_estimate",
 ]
