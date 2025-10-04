@@ -455,7 +455,8 @@ class QuasiLikelihoodEvaluator:
     ) -> Callable:
         """`S_0` を省略した簡略版疑似尤度 V1' の評価関数を生成して返す。
 
-        返される関数には JAX の ``jit`` が適用される。"""
+        返される関数には JAX の ``jit`` が適用される。
+        """
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -536,7 +537,8 @@ class QuasiLikelihoodEvaluator:
     ) -> Callable:
         """`S_0` の補正を含めた疑似尤度 V1 の評価関数を生成して返す。
 
-        返される関数には JAX の ``jit`` が適用される。"""
+        返される関数には JAX の ``jit`` が適用される。
+        """
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -669,7 +671,8 @@ class QuasiLikelihoodEvaluator:
     ) -> Callable:
         """パラメータ theta_2 を推定するための疑似尤度 V2 評価関数を生成する。
 
-        返される関数には JAX の ``jit`` が適用される。"""
+        返される関数には JAX の ``jit`` が適用される。
+        """
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -736,7 +739,8 @@ class QuasiLikelihoodEvaluator:
     ) -> Callable:
         """パラメータ theta_3 を推定するための疑似尤度 V3 評価関数を生成する。
 
-        返される関数には JAX の ``jit`` が適用される。"""
+        返される関数には JAX の ``jit`` が適用される。
+        """
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
