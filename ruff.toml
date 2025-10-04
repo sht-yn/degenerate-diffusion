@@ -26,7 +26,13 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    "old",
+    "old/**",
+    "FNmodel.ipynb",
+    "*.ipynb",
 ]
+
+force-exclude = true
 
 line-length = 100
 indent-width = 4
@@ -51,6 +57,11 @@ ignore = [
     "ISC001",
     "ISC002",
     "N806",
+    "N815",
+    "D401",
+    "D400",
+    "N803",
+    "D415",
     "Q000",
     "Q001",
     "Q002",
@@ -60,7 +71,7 @@ ignore = [
     "N802",
     "PLR0913",
     "ERA001",
-    "T201"
+    "T201",
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

@@ -12,6 +12,8 @@ from jax import lax  # For jax.lax.scan
 from jax import numpy as jnp
 from sympy import lambdify, symbols
 
+from degenerate_sim.utils.symbolic_artifact import SymbolicArtifact
+
 
 # %%
 @dataclass(frozen=True)
@@ -20,6 +22,8 @@ class DegenerateDiffusionProcess:
 
     記号計算 (sympy) を用いてモデルを定義し、
     数値計算 (numpy/jax) のための関数を lambdify で生成する。
+    `A` / `B` / `H` は `SymbolicArtifact` として保持され、
+    記号式と JAX 関数を一体で取り扱える。
     """
 
     x: sp.Array
@@ -34,18 +38,32 @@ class DegenerateDiffusionProcess:
     def __post_init__(self):
         common_args = (self.x, self.y)
         try:
-            object.__setattr__(
-                self, "A_func", lambdify((*common_args, self.theta_2), self.A, modules="jax")
-            )
-            object.__setattr__(
-                self, "B_func", lambdify((*common_args, self.theta_1), self.B, modules="jax")
-            )
-            object.__setattr__(
-                self, "H_func", lambdify((*common_args, self.theta_3), self.H, modules="jax")
-            )
+            A_func = lambdify((*common_args, self.theta_2), self.A, modules="jax")
+            B_func = lambdify((*common_args, self.theta_1), self.B, modules="jax")
+            H_func = lambdify((*common_args, self.theta_3), self.H, modules="jax")
         except Exception as e:
             print(f"Error during lambdification in __post_init__: {e}")
             raise
+
+        object.__setattr__(
+            self,
+            "A",
+            SymbolicArtifact(expr=self.A, func=A_func),
+        )
+        object.__setattr__(
+            self,
+            "B",
+            SymbolicArtifact(expr=self.B, func=B_func),
+        )
+        object.__setattr__(
+            self,
+            "H",
+            SymbolicArtifact(expr=self.H, func=H_func),
+        )
+
+        object.__setattr__(self, "A_func", A_func)
+        object.__setattr__(self, "B_func", B_func)
+        object.__setattr__(self, "H_func", H_func)
 
     @partial(jax.jit, static_argnums=(0, 5, 6, 9, 10))
     def _simulate_jax_core(
@@ -80,7 +98,7 @@ class DegenerateDiffusionProcess:
 
         self.x.shape[0]
         self.y.shape[0]
-        r = self.B.shape[1]
+        r = self.B.expr.shape[1]
 
         dt_array = jnp.asarray(dt, dtype=theta_1_val.dtype)
 

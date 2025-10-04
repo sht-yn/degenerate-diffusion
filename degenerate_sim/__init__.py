@@ -3,8 +3,8 @@
 from . import utils
 from .estimation import (
     bayes_estimate,
-    newton_solve,
     m_estimate,
+    newton_solve,
     one_step_estimate,
 )
 from .evaluation import LikelihoodEvaluator
@@ -14,8 +14,8 @@ __all__ = [
     "DegenerateDiffusionProcess",
     "LikelihoodEvaluator",
     "bayes_estimate",
-    "newton_solve",
     "m_estimate",
+    "newton_solve",
     "one_step_estimate",
     "utils",
 ]

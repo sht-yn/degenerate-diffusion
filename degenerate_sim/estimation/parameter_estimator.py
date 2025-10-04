@@ -13,6 +13,8 @@ import numpyro.distributions as dist
 from numpyro import infer
 from numpyro.distributions import transforms
 
+PAIR_LENGTH = 2
+
 Bounds = Sequence[tuple[float | None, float | None]]
 Array1D = jnp.ndarray
 
@@ -24,7 +26,7 @@ def _normalize_bounds(search_bounds: Bounds) -> jnp.ndarray:
 
     bounds_list: list[tuple[float, float]] = []
     for idx, bound in enumerate(search_bounds):
-        if not isinstance(bound, tuple) or len(bound) != 2:
+        if not isinstance(bound, tuple) or len(bound) != PAIR_LENGTH:
             msg = f"Bound at index {idx} must be a (low, high) tuple."
             raise ValueError(msg)
         low, high = bound
@@ -55,7 +57,7 @@ def m_estimate(
 ) -> np.ndarray:
     """Gradient-ascent M-estimation implemented with JAX.
 
-    The ``learning_rate`` の既定値を ``1e-3`` に下げ、必要に応じて ``log_interval``（反復回数）で
+    The ``learning_rate`` の既定値を ``1e-3`` に下げ、必要に応じて ``log_interval`` (反復回数) で
     勾配ノルムと現在の θ をログ表示できるようにした。
     """
     bounds_raw = _normalize_bounds(search_bounds)
@@ -199,7 +201,7 @@ def bayes_estimate(
     bounds = bounds_raw.astype(theta0.dtype)
     bounds_np = np.asarray(bounds)
 
-    def model():
+    def model() -> None:
         theta_components = []
         for i in range(bounds_np.shape[0]):
             low = float(bounds_np[i, 0])
