@@ -431,6 +431,15 @@ class QuasiLikelihoodEvaluator:
         S_xy_expr = Array(T_xy) - Array(U_xy)
         S_yx_expr = Array(T_yx) - Array(U_yx)
         S_yy_expr = Array(T_yy) - Array(U_yy)
+
+        def _simplify_tensor(tensor: Array) -> Array:
+            """要素ごとに `sympy.simplify` を適用して冗長な式を減らす。"""
+            return Array(tensor.applyfunc(sp.simplify))
+
+        S_xx_expr = _simplify_tensor(S_xx_expr)
+        S_xy_expr = _simplify_tensor(S_xy_expr)
+        S_yx_expr = _simplify_tensor(S_yx_expr)
+        S_yy_expr = _simplify_tensor(S_yy_expr)
         lambdify_args = (
             self.model.x,
             self.model.y,
@@ -438,10 +447,10 @@ class QuasiLikelihoodEvaluator:
             self.model.theta_2,
             self.model.theta_3,
         )
-        S_xx_func = lambdify(lambdify_args, S_xx_expr, modules="jax")
-        S_xy_func = lambdify(lambdify_args, S_xy_expr, modules="jax")
-        S_yx_func = lambdify(lambdify_args, S_yx_expr, modules="jax")
-        S_yy_func = lambdify(lambdify_args, S_yy_expr, modules="jax")
+        S_xx_func = lambdify(lambdify_args, S_xx_expr, modules="jax", cse=True)
+        S_xy_func = lambdify(lambdify_args, S_xy_expr, modules="jax", cse=True)
+        S_yx_func = lambdify(lambdify_args, S_yx_expr, modules="jax", cse=True)
+        S_yy_func = lambdify(lambdify_args, S_yy_expr, modules="jax", cse=True)
         S_xx = SymbolicArtifact(S_xx_expr, S_xx_func)
         S_xy = SymbolicArtifact(S_xy_expr, S_xy_func)
         S_yx = SymbolicArtifact(S_yx_expr, S_yx_func)

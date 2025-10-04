@@ -58,6 +58,26 @@
 5. **最適化ルーチンへ渡す**
    - evaluator は callable (JAX 関数) を返します。`parameter_estimator.m_estimate` や `newton_solve` などと組み合わせてパラメータ推定を実施します。
 
+## SymPy による記号式の簡約と高速化
+
+V1 系の疑似尤度は高次の `S_l` テンソルを多数評価するため、lambdify された関数が大きくなりがちです。2024.06 時点の実装では、`degenerate_sim/evaluation/likelihood_evaluator_jax.py:424-440` で SymPy の簡約機能を使い、JAX 側の実行コストを抑えています。仕組みは次の通りです。
+
+- **`sympy.simplify` の適用**
+  - `Array(...).applyfunc(sp.simplify)` とすることで、テンソルの各要素ごとに簡約を試みます。
+  - `_simplify_tensor` ヘルパーを介して `S_xx`, `S_xy`, `S_yx`, `S_yy` それぞれに同じ処理を実施しています。
+  - `simplify` は式を縮約することが多い一方、場合によっては複雑化させることもあります。実装ではテンソル要素ごとに適用し、後続の `lambdify` で生成される JAX 関数のサイズを抑制しています。
+
+- **`sympy.cse`（共通部分式抽出）の利用**
+  - `lambdify(..., modules="jax", cse=True)` を指定すると、SymPy が式内の共通部分を自動抽出し、JAX の演算としても一度だけ評価するように変換してくれます。
+  - `simplify` と組み合わせることで、`k` が大きい場合でも JIT 後の実行が大幅に高速化されることを確認しています。
+
+- **導入手順のポイント**
+  1. SymPy で得たテンソル（`Array`）を `simplify` する。
+  2. `lambdify` する際に `cse=True` を付ける。
+  3. 生成された `SymbolicArtifact` をキャッシュし、JAX evaluator から再利用する。
+
+これらの処理は既存コードに組み込まれているため、ユーザー側で追加作業は不要です。独自にテンソル式を拡張する場合は、同じパターンを踏襲すると評価コストを抑えやすくなります。
+
 ## 各 evaluator の依存関係
 
 | evaluator | 目的 | 要求される主なコンポーネント |
