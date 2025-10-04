@@ -44,6 +44,9 @@ class SymbolicPreparationError(RuntimeError):
 class SymbolicPrecomputation:
     """記号的な前処理結果と対応する関数群をまとめたデータコンテナ。"""
 
+    A: SymbolicArtifact
+    B: SymbolicArtifact
+    H: SymbolicArtifact
     C: SymbolicArtifact
     inv_C: SymbolicArtifact
     log_det_C: SymbolicArtifact
@@ -114,6 +117,9 @@ class SymbolicLikelihoodPreparer:
         )
 
         return SymbolicPrecomputation(
+            A=self.model.A,
+            B=self.model.B,
+            H=self.model.H,
             C=C_artifact,
             inv_C=inv_C,
             log_det_C=log_det_C,
@@ -335,7 +341,8 @@ class QuasiLikelihoodEvaluator:
     ) -> jnp.ndarray:
         r"""疑似尤度で利用する \(\Delta x\) をスケール済みで算出する。"""
         if h <= 0:
-            return jnp.zeros_like(x_j, dtype=x_j.dtype)
+            msg = "h must be positive in Dx_func"
+            raise ValueError(msg)
         DX_SCALE = jnp.power(h, -0.5)
         D_x = DX_SCALE * (x_j - x_j_1)
         if k_arg >= 1:
@@ -376,7 +383,7 @@ class QuasiLikelihoodEvaluator:
             D_y -= DY_SCALE * jnp.power(h, 1.0) * H_val
         if k_arg >= 2:
             args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
-            for m_loop in range(2, k_arg + 1):
+            for m_loop in range(2, k_arg + 2):
                 if m_loop >= len(L0_y_funcs):
                     raise IndexError(
                         f"Dy_func requested L0_y_funcs[{m_loop}] but only {len(L0_y_funcs)} terms are available."
@@ -386,7 +393,9 @@ class QuasiLikelihoodEvaluator:
                 D_y -= DY_SCALE * h_pow_m * L0_y_m_val
         return D_y
 
-    def S(self, k: int) -> tuple[Array, Array, Array, Array]:
+    def S(
+        self, k: int
+    ) -> tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]:
         """次数 `k` の `S` テンソルを計算し、キャッシュへ保存して返す。"""
         if k in self._S_cache:
             return self._S_cache[k]
@@ -399,15 +408,15 @@ class QuasiLikelihoodEvaluator:
 
         def compute_U_component(f1: Array, f2: Array, total_sum_order: int) -> Array:
             U_component = Array(sp_zeros(*tensorproduct(f1, f2).shape))
-            for m1 in range(1, total_sum_order):
+            for m1 in range(total_sum_order + 1):
                 m2 = total_sum_order - m1
                 L0_f1_m1 = self.generator.L_0(f1, m1).expr
                 L0_f2_m2 = self.generator.L_0(f2, m2).expr
                 term = tensorproduct(L0_f1_m1, L0_f2_m2)
                 if term.shape != U_component.shape:
-                    U_component = Array(term).reshape(*U_component.shape)
+                    U_component += Array(term).reshape(*U_component.shape)
                 else:
-                    U_component = U_component + term
+                    U_component += term
             return Array(U_component)
 
         U_xx = compute_U_component(x_sym, x_sym, k + 1)
@@ -415,19 +424,10 @@ class QuasiLikelihoodEvaluator:
         U_yx = compute_U_component(y_sym, x_sym, k + 2)
         U_yy = compute_U_component(y_sym, y_sym, k + 3)
 
-        S_xx = Array(T_xx) - Array(U_xx)
-        S_xy = Array(T_xy) - Array(U_xy)
-        S_yx = Array(T_yx) - Array(U_yx)
-        S_yy = Array(T_yy) - Array(U_yy)
-        result = (S_xx, S_xy, S_yx, S_yy)
-        self._S_cache[k] = result
-        return result
-
-    def S_func(self, k: int) -> tuple[Callable, Callable, Callable, Callable]:
-        """次数 `k` の `S` テンソルを評価する JAX 関数のタプルを返す。"""
-        if k in self._S_func_cache:
-            return self._S_func_cache[k]
-        S_xx_expr, S_xy_expr, S_yx_expr, S_yy_expr = self.S(k)
+        S_xx_expr = Array(T_xx) - Array(U_xx)
+        S_xy_expr = Array(T_xy) - Array(U_xy)
+        S_yx_expr = Array(T_yx) - Array(U_yx)
+        S_yy_expr = Array(T_yy) - Array(U_yy)
         lambdify_args = (
             self.model.x,
             self.model.y,
@@ -435,13 +435,17 @@ class QuasiLikelihoodEvaluator:
             self.model.theta_2,
             self.model.theta_3,
         )
-        f_xx = lambdify(lambdify_args, S_xx_expr, modules="jax")
-        f_xy = lambdify(lambdify_args, S_xy_expr, modules="jax")
-        f_yx = lambdify(lambdify_args, S_yx_expr, modules="jax")
-        f_yy = lambdify(lambdify_args, S_yy_expr, modules="jax")
-        funcs = (f_xx, f_xy, f_yx, f_yy)
-        self._S_func_cache[k] = funcs
-        return funcs
+        S_xx_func = lambdify(lambdify_args, S_xx_expr, modules="jax")
+        S_xy_func = lambdify(lambdify_args, S_xy_expr, modules="jax")
+        S_yx_func = lambdify(lambdify_args, S_yx_expr, modules="jax")
+        S_yy_func = lambdify(lambdify_args, S_yy_expr, modules="jax")
+        S_xx = SymbolicArtifact(S_xx_expr, S_xx_func)
+        S_xy = SymbolicArtifact(S_xy_expr, S_xy_func)
+        S_yx = SymbolicArtifact(S_yx_expr, S_yx_func)
+        S_yy = SymbolicArtifact(S_yy_expr, S_yy_func)
+        result = (S_xx, S_xy, S_yx, S_yy)
+        self._S_cache[k] = result
+        return result
 
     def make_quasi_likelihood_v1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
@@ -456,7 +460,7 @@ class QuasiLikelihoodEvaluator:
             raise ValueError(msg)
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
-        S_l_funcs = tuple(self.S_func(l_s) for l_s in range(1, k))
+        S_xx_funcs = tuple(self.S(l_s)[0].func for l_s in range(1, k))
 
         invC_func = self.symbolics.inv_C.func
         logDetC_func = self.symbolics.log_det_C.func
@@ -469,39 +473,38 @@ class QuasiLikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            theta_1_val_j = jnp.asarray(theta_1_val)
-            theta_1_bar_j = jnp.asarray(theta_1_bar)
-            theta_2_bar_j = jnp.asarray(theta_2_bar)
-            theta_3_bar_j = jnp.asarray(theta_3_bar)
+            theta_1_val = jnp.asarray(theta_1_val)
+            theta_1_bar = jnp.asarray(theta_1_bar)
+            theta_2_bar = jnp.asarray(theta_2_bar)
+            theta_3_bar = jnp.asarray(theta_3_bar)
 
             result_dtype = jnp.result_type(
-                theta_1_val_j.dtype,
-                theta_1_bar_j.dtype,
-                theta_2_bar_j.dtype,
-                theta_3_bar_j.dtype,
+                theta_1_val.dtype,
+                theta_1_bar.dtype,
+                theta_2_bar.dtype,
+                theta_3_bar.dtype,
             )
 
             def scan_body(total, step_inputs):
                 x_j, x_j_1, y_j_1 = step_inputs
-                invC_val = invC_func(x_j_1, y_j_1, theta_1_val_j)
-                logDetC_val = logDetC_func(x_j_1, y_j_1, theta_1_val_j)
+                invC_val = invC_func(x_j_1, y_j_1, theta_1_val)
+                logDetC_val = logDetC_func(x_j_1, y_j_1, theta_1_val)
                 Dx_val = self.Dx_func(
                     L0_x_funcs,
                     x_j,
                     x_j_1,
                     y_j_1,
-                    theta_2_bar_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
                     k - 1,
                 )
                 sum_Sxx_val = jnp.zeros((d_x, d_x), dtype=invC_val.dtype)
-                for idx, S_funcs in enumerate(S_l_funcs, start=1):
-                    Sxx_func = S_funcs[0]
+                for idx, Sxx_func in enumerate(S_xx_funcs, start=1):
                     sum_Sxx_val += (h**idx) * Sxx_func(
-                        x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j
+                        x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar
                     )
                 term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
                 term2_trace = jnp.einsum("ij,ji->", invC_val, sum_Sxx_val)
@@ -537,7 +540,10 @@ class QuasiLikelihoodEvaluator:
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
         L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 2))
-        S_l_funcs = tuple(self.S_func(l_s) for l_s in range(1, k))
+        S_funcs = tuple(
+            (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
+            for l_s in range(1, k)
+        )
 
         inv_S0_xx_func = self.symbolics.inv_S0_xx.func
         inv_S0_xy_func = self.symbolics.inv_S0_xy.func
@@ -554,49 +560,49 @@ class QuasiLikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            theta_1_val_j = jnp.asarray(theta_1_val)
-            theta_1_bar_j = jnp.asarray(theta_1_bar)
-            theta_2_bar_j = jnp.asarray(theta_2_bar)
-            theta_3_bar_j = jnp.asarray(theta_3_bar)
+            theta_1_val = jnp.asarray(theta_1_val)
+            theta_1_bar = jnp.asarray(theta_1_bar)
+            theta_2_bar = jnp.asarray(theta_2_bar)
+            theta_3_bar = jnp.asarray(theta_3_bar)
 
             result_dtype = jnp.result_type(
-                theta_1_val_j.dtype,
-                theta_1_bar_j.dtype,
-                theta_2_bar_j.dtype,
-                theta_3_bar_j.dtype,
+                theta_1_val.dtype,
+                theta_1_bar.dtype,
+                theta_2_bar.dtype,
+                theta_3_bar.dtype,
             )
 
             def scan_body(total, step_inputs):
                 x_j, y_j, x_j_1, y_j_1 = step_inputs
-                inv_S0_xx_val = inv_S0_xx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                inv_S0_xy_val = inv_S0_xy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                inv_S0_yx_val = inv_S0_yx_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                inv_S0_yy_val = inv_S0_yy_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
-                log_det_S0_val = log_det_S0_func(x_j_1, y_j_1, theta_1_val_j, theta_3_bar_j)
+                inv_S0_xx_val = inv_S0_xx_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_xy_val = inv_S0_xy_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_yx_val = inv_S0_yx_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_yy_val = inv_S0_yy_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                log_det_S0_val = log_det_S0_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
 
                 Dx_val = self.Dx_func(
                     L0_x_funcs,
                     x_j,
                     x_j_1,
                     y_j_1,
-                    theta_2_bar_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
-                    k,
+                    k - 1,
                 )
                 Dy_val = self.Dy_func(
                     L0_y_funcs,
                     y_j,
                     y_j_1,
                     x_j_1,
-                    theta_3_bar_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_3_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
-                    k + 1,
+                    k - 1,
                 )
 
                 sum_S_xx = jnp.zeros((d_x, d_x), dtype=inv_S0_xx_val.dtype)
@@ -604,27 +610,28 @@ class QuasiLikelihoodEvaluator:
                 sum_S_yx = jnp.zeros((d_y, d_x), dtype=inv_S0_xx_val.dtype)
                 sum_S_yy = jnp.zeros((d_y, d_y), dtype=inv_S0_xx_val.dtype)
 
-                for idx, s_funcs in enumerate(S_l_funcs, start=1):
-                    s_xx = s_funcs[0](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                    s_xy = s_funcs[1](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                    s_yx = s_funcs[2](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
-                    s_yy = s_funcs[3](x_j_1, y_j_1, theta_1_bar_j, theta_2_bar_j, theta_3_bar_j)
+                for idx, s_funcs in enumerate(S_funcs, start=1):
+                    s_xx = s_funcs[0](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_xy = s_funcs[1](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_yx = s_funcs[2](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_yy = s_funcs[3](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
                     h_power = h**idx
                     sum_S_xx += h_power * s_xx
                     sum_S_xy += h_power * s_xy
                     sum_S_yx += h_power * s_yx
                     sum_S_yy += h_power * s_yy
 
+                # ここまで読んだぞ
                 q_xx = jnp.einsum("ij,i,j->", inv_S0_xx_val, Dx_val, Dx_val)
                 q_xy = jnp.einsum("ij,i,j->", inv_S0_xy_val, Dx_val, Dy_val)
                 q_yx = jnp.einsum("ij,i,j->", inv_S0_yx_val, Dy_val, Dx_val)
                 q_yy = jnp.einsum("ij,i,j->", inv_S0_yy_val, Dy_val, Dy_val)
                 quadratic_term = -(q_xx + q_xy + q_yx + q_yy)
 
-                tr_xx = jnp.einsum("ij,ji->", inv_S0_xx_val, sum_S_xx)
-                tr_xy = jnp.einsum("ij,ji->", inv_S0_xy_val, sum_S_yx)
-                tr_yx = jnp.einsum("ij,ji->", inv_S0_yx_val, sum_S_xy)
-                tr_yy = jnp.einsum("ij,ji->", inv_S0_yy_val, sum_S_yy)
+                tr_xx = jnp.einsum("ij,ij->", inv_S0_xx_val, sum_S_xx)
+                tr_xy = jnp.einsum("ij,ij->", inv_S0_xy_val, sum_S_xy)
+                tr_yx = jnp.einsum("ij,ij->", inv_S0_yx_val, sum_S_yx)
+                tr_yy = jnp.einsum("ij,ij->", inv_S0_yy_val, sum_S_yy)
                 trace_term = tr_xx + tr_xy + tr_yx + tr_yy
 
                 logdet_term = -log_det_S0_val
@@ -650,6 +657,7 @@ class QuasiLikelihoodEvaluator:
 
         return evaluate_v1
 
+    # ここまで読んだ
     def make_quasi_likelihood_v2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
@@ -671,30 +679,30 @@ class QuasiLikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            theta_2_val_j = jnp.asarray(theta_2_val)
-            theta_1_bar_j = jnp.asarray(theta_1_bar)
-            theta_2_bar_j = jnp.asarray(theta_2_bar)
-            theta_3_bar_j = jnp.asarray(theta_3_bar)
+            theta_2_val = jnp.asarray(theta_2_val)
+            theta_1_bar = jnp.asarray(theta_1_bar)
+            theta_2_bar = jnp.asarray(theta_2_bar)
+            theta_3_bar = jnp.asarray(theta_3_bar)
 
             result_dtype = jnp.result_type(
-                theta_2_val_j.dtype,
-                theta_1_bar_j.dtype,
-                theta_2_bar_j.dtype,
-                theta_3_bar_j.dtype,
+                theta_2_val.dtype,
+                theta_1_bar.dtype,
+                theta_2_bar.dtype,
+                theta_3_bar.dtype,
             )
 
             def scan_body(total, step_inputs):
                 x_j, x_j_1, y_j_1 = step_inputs
-                invC_val = invC_func(x_j_1, y_j_1, theta_1_bar_j)
+                invC_val = invC_func(x_j_1, y_j_1, theta_1_bar)
                 Dx_val = self.Dx_func(
                     L0_x_funcs,
                     x_j,
                     x_j_1,
                     y_j_1,
-                    theta_2_val_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_2_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
                     k,
                 )
@@ -739,31 +747,31 @@ class QuasiLikelihoodEvaluator:
             theta_2_bar: jnp.ndarray,
             theta_3_bar: jnp.ndarray,
         ) -> float:
-            theta_3_val_j = jnp.asarray(theta_3_val)
-            theta_1_bar_j = jnp.asarray(theta_1_bar)
-            theta_2_bar_j = jnp.asarray(theta_2_bar)
-            theta_3_bar_j = jnp.asarray(theta_3_bar)
+            theta_3_val = jnp.asarray(theta_3_val)
+            theta_1_bar = jnp.asarray(theta_1_bar)
+            theta_2_bar = jnp.asarray(theta_2_bar)
+            theta_3_bar = jnp.asarray(theta_3_bar)
 
             result_dtype = jnp.result_type(
-                theta_3_val_j.dtype,
-                theta_1_bar_j.dtype,
-                theta_2_bar_j.dtype,
-                theta_3_bar_j.dtype,
+                theta_3_val.dtype,
+                theta_1_bar.dtype,
+                theta_2_bar.dtype,
+                theta_3_bar.dtype,
             )
 
             def scan_body(total, step_inputs):
                 x_j, y_j, x_j_1, y_j_1 = step_inputs
-                invV_val = invV_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
-                pHTinvV_val = pHTinvV_func(x_j_1, y_j_1, theta_1_bar_j, theta_3_bar_j)
+                invV_val = invV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
+                pHTinvV_val = pHTinvV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
                 Dx_val = self.Dx_func(
                     L0_x_funcs,
                     x_j,
                     x_j_1,
                     y_j_1,
-                    theta_2_bar_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
                     k,
                 )
@@ -772,12 +780,12 @@ class QuasiLikelihoodEvaluator:
                     y_j,
                     y_j_1,
                     x_j_1,
-                    theta_3_val_j,
-                    theta_1_bar_j,
-                    theta_2_bar_j,
-                    theta_3_bar_j,
+                    theta_3_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
                     h,
-                    k + 1,
+                    k,
                 )
 
                 term1_V3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
