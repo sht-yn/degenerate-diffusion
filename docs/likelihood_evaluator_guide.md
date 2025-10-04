@@ -14,12 +14,14 @@
   - SymPy の式を再利用するためのキャッシュを持ち、`L`, `L_0`, `L_0_func` を外部に提供します。
 - `QuasiLikelihoodEvaluator`
   - JAX 上で疑似尤度を計算する各種ファクトリ (`make_quasi_likelihood_v*_evaluator`) を提供します。
+  - `S(k)` を呼び出すと、各テンソル成分の記号式と対応する JAX 関数をまとめた `SymbolicArtifact` のタプルが取得できます。
   - `SymbolicPrecomputation` を参照し、利用可能なコンポーネントを検査した上で evaluators を生成します。
 
 ### 補助クラス
 
 - `SymbolicArtifact`
   - 記号式 (`expr`) と対応する JAX 関数 (`func`) をまとめたデータコンテナ。
+  - `QuasiLikelihoodEvaluator.S(k)` などが返す成果物にもこのコンテナが使われます。
 - `SymbolicPrecomputation`
   - 前処理済みの記号式と関数をまとめた不変データクラス。
 - 例外クラス

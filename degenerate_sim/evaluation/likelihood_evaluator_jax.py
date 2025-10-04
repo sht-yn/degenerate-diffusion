@@ -252,7 +252,8 @@ class InfinitesimalGenerator:
             return tensor.applyfunc(self._L_elem_once)
         if isinstance(tensor, (Expr, Basic)):
             return self._L_elem_once(tensor)
-        raise TypeError("Unsupported tensor type for infinitesimal generator")
+        msg = f"Unsupported tensor type for infinitesimal generator: {type(tensor)}"
+        raise TypeError(msg)
 
     def _L_elem_once(self, f_elem: Basic) -> Basic:
         if not isinstance(f_elem, Expr) or f_elem.is_constant(simplify=False):
@@ -323,8 +324,9 @@ class QuasiLikelihoodEvaluator:
         self.model = model
         self.symbolics = symbolics
         self.generator = generator
-        self._S_cache: dict[int, tuple[Array, Array, Array, Array]] = {}
-        self._S_func_cache: dict[int, tuple[Callable, Callable, Callable, Callable]] = {}
+        self._S_cache: dict[
+            int, tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]
+        ] = {}
 
     def Dx_func(
         self,
@@ -396,7 +398,7 @@ class QuasiLikelihoodEvaluator:
     def S(
         self, k: int
     ) -> tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]:
-        """次数 `k` の `S` テンソルを計算し、キャッシュへ保存して返す。"""
+        """次数 `k` の `S` テンソルを計算し、式と JAX 関数のペアを返す。"""
         if k in self._S_cache:
             return self._S_cache[k]
         x_sym = self.model.x
@@ -657,7 +659,6 @@ class QuasiLikelihoodEvaluator:
 
         return evaluate_v1
 
-    # ここまで読んだ
     def make_quasi_likelihood_v2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
@@ -843,13 +844,11 @@ class LikelihoodEvaluator:
         """:class:`QuasiLikelihoodEvaluator` の `Dy_func` を呼び出すショートカット。"""
         return self.quasi.Dy_func(*args, **kwargs)
 
-    def S(self, k: int) -> tuple[Array, Array, Array, Array]:
-        """:class:`QuasiLikelihoodEvaluator` の `S` を利用して次数 `k` のテンソルを得る。"""
+    def S(
+        self, k: int
+    ) -> tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]:
+        """`S` テンソルの記号式と JAX 評価関数をまとめた成果物を返す。"""
         return self.quasi.S(k)
-
-    def S_func(self, k: int) -> tuple[Callable, Callable, Callable, Callable]:
-        """:class:`QuasiLikelihoodEvaluator` の `S_func` を呼び出して関数群を取得する。"""
-        return self.quasi.S_func(k)
 
     def make_quasi_likelihood_v1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
