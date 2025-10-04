@@ -14,6 +14,7 @@
   - SymPy の式を再利用するためのキャッシュを持ち、`L`, `L_0`, `L_0_func` を外部に提供します。
 - `QuasiLikelihoodEvaluator`
   - JAX 上で疑似尤度を計算する各種ファクトリ (`make_quasi_likelihood_v*_evaluator`) を提供します。
+  - 各ファクトリの戻り値は JAX の `jit` 済み関数なので、生成後すぐ高速に評価／自動微分へ渡せます。
   - `S(k)` を呼び出すと、各テンソル成分の記号式と対応する JAX 関数をまとめた `SymbolicArtifact` のタプルが取得できます。
   - `SymbolicPrecomputation` を参照し、利用可能なコンポーネントを検査した上で evaluators を生成します。
 
@@ -51,7 +52,7 @@
    - C や V が特異な場合などは初期化時に `SymbolicPreparationError` が送出されるため、モデル式やパラメータを調整してください。
 
 4. **疑似尤度の evaluator を生成**
-   - `make_quasi_likelihood_v1_evaluator`, `make_quasi_likelihood_v1_prime_evaluator`, `make_quasi_likelihood_v2_evaluator`, `make_quasi_likelihood_v3_evaluator` を用途に応じて呼び出します。
+   - `make_quasi_likelihood_v1_evaluator`, `make_quasi_likelihood_v1_prime_evaluator`, `make_quasi_likelihood_v2_evaluator`, `make_quasi_likelihood_v3_evaluator` を用途に応じて呼び出します。戻り値はすべて `jit` 済みの callable です。
   - 必須成分が欠けている場合は初期化時点で `SymbolicPreparationError` が送出されるため、モデル式やパラメータを調整してください。
 
 5. **最適化ルーチンへ渡す**

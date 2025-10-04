@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import jax
 import jax.numpy as jnp
 import sympy as sp
 from jax import lax
@@ -452,7 +453,9 @@ class QuasiLikelihoodEvaluator:
     def make_quasi_likelihood_v1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """`S_0` を省略した簡略版疑似尤度 V1' の評価関数を生成して返す。"""
+        """`S_0` を省略した簡略版疑似尤度 V1' の評価関数を生成して返す。
+
+        返される関数には JAX の ``jit`` が適用される。"""
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -526,12 +529,14 @@ class QuasiLikelihoodEvaluator:
                 return total_log_likelihood / (2.0 * num_transitions)
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return evaluate_v1_prime
+        return jax.jit(evaluate_v1_prime)
 
     def make_quasi_likelihood_v1_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """`S_0` の補正を含めた疑似尤度 V1 の評価関数を生成して返す。"""
+        """`S_0` の補正を含めた疑似尤度 V1 の評価関数を生成して返す。
+
+        返される関数には JAX の ``jit`` が適用される。"""
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -657,12 +662,14 @@ class QuasiLikelihoodEvaluator:
                 return total_log_likelihood / (2.0 * num_transitions)
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return evaluate_v1
+        return jax.jit(evaluate_v1)
 
     def make_quasi_likelihood_v2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_2 を推定するための疑似尤度 V2 評価関数を生成する。"""
+        """パラメータ theta_2 を推定するための疑似尤度 V2 評価関数を生成する。
+
+        返される関数には JAX の ``jit`` が適用される。"""
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -722,12 +729,14 @@ class QuasiLikelihoodEvaluator:
                 return total_log_likelihood / (2.0 * h * num_transitions)
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return evaluate_v2
+        return jax.jit(evaluate_v2)
 
     def make_quasi_likelihood_v3_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_3 を推定するための疑似尤度 V3 評価関数を生成する。"""
+        """パラメータ theta_3 を推定するための疑似尤度 V3 評価関数を生成する。
+
+        返される関数には JAX の ``jit`` が適用される。"""
         x_series_jnp = jnp.asarray(x_series)
         y_series_jnp = jnp.asarray(y_series)
         n = x_series_jnp.shape[0]
@@ -811,7 +820,7 @@ class QuasiLikelihoodEvaluator:
                 return (6.0 * h * total_log_likelihood) / num_transitions
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return evaluate_v3
+        return jax.jit(evaluate_v3)
 
 
 class LikelihoodEvaluator:
