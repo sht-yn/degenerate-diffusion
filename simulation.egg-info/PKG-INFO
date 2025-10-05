@@ -1,0 +1,312 @@
+Metadata-Version: 2.4
+Name: simulation
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: absl-py>=2.3.1
+Requires-Dist: anyio>=4.11.0
+Requires-Dist: appnope>=0.1.4
+Requires-Dist: argon2-cffi>=25.1.0
+Requires-Dist: argon2-cffi-bindings>=25.1.0
+Requires-Dist: arrow>=1.3.0
+Requires-Dist: arviz>=0.22.0
+Requires-Dist: asttokens>=3.0.0
+Requires-Dist: async-lru>=2.0.5
+Requires-Dist: attrs>=25.3.0
+Requires-Dist: babel>=2.17.0
+Requires-Dist: beautifulsoup4>=4.13.5
+Requires-Dist: blackjax>=1.2.5
+Requires-Dist: bleach>=6.2.0
+Requires-Dist: cachetools>=6.2.0
+Requires-Dist: certifi>=2025.8.3
+Requires-Dist: cffi>=2.0.0
+Requires-Dist: charset-normalizer>=3.4.3
+Requires-Dist: chex>=0.1.91
+Requires-Dist: cloudpickle>=3.1.1
+Requires-Dist: comm>=0.2.3
+Requires-Dist: cons>=0.4.7
+Requires-Dist: contourpy>=1.3.3
+Requires-Dist: cycler>=0.12.1
+Requires-Dist: dataclasses>=0.8
+Requires-Dist: debugpy>=1.8.17
+Requires-Dist: decorator>=5.2.1
+Requires-Dist: defusedxml>=0.7.1
+Requires-Dist: distrax>=0.1.7
+Requires-Dist: dm-tree>=0.1.9
+Requires-Dist: einops>=0.8.1
+Requires-Dist: etils>=1.13.0
+Requires-Dist: etuples>=0.3.10
+Requires-Dist: executing>=2.2.1
+Requires-Dist: farama-notifications>=0.0.4
+Requires-Dist: fastjsonschema>=2.21.2
+Requires-Dist: fastprogress>=1.0.3
+Requires-Dist: filelock>=3.19.1
+Requires-Dist: flax>=0.11.2
+Requires-Dist: fonttools>=4.60.0
+Requires-Dist: fqdn>=1.5.1
+Requires-Dist: fsspec>=2025.9.0
+Requires-Dist: gast>=0.6.0
+Requires-Dist: grpcio>=1.75.0
+Requires-Dist: gymnasium>=1.2.1
+Requires-Dist: h11>=0.16.0
+Requires-Dist: h5netcdf>=1.6.4
+Requires-Dist: h5py>=3.14.0
+Requires-Dist: httpcore>=1.0.9
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: humanize>=4.13.0
+Requires-Dist: idna>=3.10
+Requires-Dist: importlib-resources>=6.5.2
+Requires-Dist: ipykernel>=6.30.1
+Requires-Dist: ipython>=9.5.0
+Requires-Dist: ipython-pygments-lexers>=1.1.1
+Requires-Dist: ipywidgets>=8.1.7
+Requires-Dist: isoduration>=20.11.0
+Requires-Dist: japanize-matplotlib>=1.1.3
+Requires-Dist: jax>=0.7.2
+Requires-Dist: jaxlib>=0.7.2
+Requires-Dist: jaxopt>=0.8.5
+Requires-Dist: jedi>=0.19.2
+Requires-Dist: jinja2>=3.1.6
+Requires-Dist: joblib>=1.5.2
+Requires-Dist: json5>=0.12.1
+Requires-Dist: jsonpointer>=3.0.0
+Requires-Dist: jsonschema>=4.25.1
+Requires-Dist: jsonschema-specifications>=2025.9.1
+Requires-Dist: jupyter-client>=8.6.3
+Requires-Dist: jupyter-core>=5.8.1
+Requires-Dist: jupyter-events>=0.12.0
+Requires-Dist: jupyter-lsp>=2.3.0
+Requires-Dist: jupyter-server>=2.17.0
+Requires-Dist: jupyter-server-terminals>=0.5.3
+Requires-Dist: jupyterlab>=4.4.7
+Requires-Dist: jupyterlab-pygments>=0.3.0
+Requires-Dist: jupyterlab-server>=2.27.3
+Requires-Dist: jupyterlab-widgets>=3.0.15
+Requires-Dist: kiwisolver>=1.4.9
+Requires-Dist: llvmlite>=0.45.0
+Requires-Dist: logical-unification>=0.4.6
+Requires-Dist: markdown>=3.9
+Requires-Dist: markdown-it-py>=4.0.0
+Requires-Dist: markupsafe>=3.0.2
+Requires-Dist: matplotlib>=3.10.6
+Requires-Dist: matplotlib-inline>=0.1.7
+Requires-Dist: mdurl>=0.1.2
+Requires-Dist: minikanren>=1.0.5
+Requires-Dist: mistune>=3.1.4
+Requires-Dist: ml-dtypes>=0.5.3
+Requires-Dist: mpmath>=1.3.0
+Requires-Dist: msgpack>=1.1.1
+Requires-Dist: multipledispatch>=1.0.0
+Requires-Dist: nbclient>=0.10.2
+Requires-Dist: nbconvert>=7.16.6
+Requires-Dist: nbformat>=5.10.4
+Requires-Dist: nest-asyncio>=1.6.0
+Requires-Dist: networkx>=3.5
+Requires-Dist: notebook-shim>=0.2.4
+Requires-Dist: numba>=0.62.0
+Requires-Dist: numpy>=2.3.3
+Requires-Dist: numpyro>=0.19.0
+Requires-Dist: opt-einsum>=3.4.0
+Requires-Dist: optax>=0.2.6
+Requires-Dist: orbax-checkpoint>=0.11.25
+Requires-Dist: overrides>=7.7.0
+Requires-Dist: packaging>=25.0
+Requires-Dist: pandas>=2.3.2
+Requires-Dist: pandocfilters>=1.5.1
+Requires-Dist: parso>=0.8.5
+Requires-Dist: pexpect>=4.9.0
+Requires-Dist: pillow>=11.3.0
+Requires-Dist: platformdirs>=4.4.0
+Requires-Dist: prometheus-client>=0.23.1
+Requires-Dist: prompt-toolkit>=3.0.52
+Requires-Dist: protobuf>=6.32.1
+Requires-Dist: psutil>=7.1.0
+Requires-Dist: ptyprocess>=0.7.0
+Requires-Dist: pure-eval>=0.2.3
+Requires-Dist: pycparser>=2.23
+Requires-Dist: pygments>=2.19.2
+Requires-Dist: pymc>=5.25.1
+Requires-Dist: pyparsing>=3.2.5
+Requires-Dist: pytensor>=2.31.7
+Requires-Dist: python-dateutil>=2.9.0.post0
+Requires-Dist: python-json-logger>=3.3.0
+Requires-Dist: pytz>=2025.2
+Requires-Dist: pyyaml>=6.0.2
+Requires-Dist: pyzmq>=27.1.0
+Requires-Dist: referencing>=0.36.2
+Requires-Dist: requests>=2.32.5
+Requires-Dist: rfc3339-validator>=0.1.4
+Requires-Dist: rfc3986-validator>=0.1.1
+Requires-Dist: rich>=14.1.0
+Requires-Dist: rpds-py>=0.27.1
+Requires-Dist: ruff>=0.13.1
+Requires-Dist: scikit-learn>=1.7.2
+Requires-Dist: scipy>=1.16.2
+Requires-Dist: seaborn>=0.13.2
+Requires-Dist: send2trash>=1.8.3
+Requires-Dist: setuptools>=80.9.0
+Requires-Dist: shap>=0.48.0
+Requires-Dist: simplejson>=3.20.1
+Requires-Dist: six>=1.17.0
+Requires-Dist: slicer>=0.0.8
+Requires-Dist: sniffio>=1.3.1
+Requires-Dist: soupsieve>=2.8
+Requires-Dist: stable-baselines3>=2.7.0
+Requires-Dist: stack-data>=0.6.3
+Requires-Dist: sympy>=1.14.0
+Requires-Dist: tensorboard>=2.20.0
+Requires-Dist: tensorboard-data-server>=0.7.2
+Requires-Dist: tensorflow-probability>=0.25.0
+Requires-Dist: tensorstore>=0.1.77
+Requires-Dist: terminado>=0.18.1
+Requires-Dist: threadpoolctl>=3.6.0
+Requires-Dist: tinycss2>=1.4.0
+Requires-Dist: toolz>=1.0.0
+Requires-Dist: torch>=2.8.0
+Requires-Dist: tornado>=6.5.2
+Requires-Dist: tqdm>=4.67.1
+Requires-Dist: traitlets>=5.14.3
+Requires-Dist: treescope>=0.1.10
+Requires-Dist: types-python-dateutil>=2.9.0.20250822
+Requires-Dist: typing-extensions>=4.15.0
+Requires-Dist: tzdata>=2025.2
+Requires-Dist: uri-template>=1.3.0
+Requires-Dist: urllib3>=2.5.0
+Requires-Dist: wcwidth>=0.2.14
+Requires-Dist: webcolors>=24.11.1
+Requires-Dist: webencodings>=0.5.1
+Requires-Dist: websocket-client>=1.8.0
+Requires-Dist: werkzeug>=3.1.3
+Requires-Dist: widgetsnbextension>=4.0.14
+Requires-Dist: wrapt>=1.17.3
+Requires-Dist: xarray>=2025.9.0
+Requires-Dist: xarray-einstats>=0.9.1
+Requires-Dist: zipp>=3.23.0
+
+# 退化拡散過程シミュレーションツールキット
+
+このリポジトリは退化拡散過程（degenerate diffusion process）に対する擬似尤度推定の実験環境です。SymPy で記述した記号モデルを JAX へ変換し、高速なシミュレーションと NumPyro ベースの推定を行います。研究用ノートブックを主眼としていますが、`degenerate_sim/` 配下のモジュールは軽量なツールキットとしても利用できます。
+
+## 特徴
+- SymPy で定義したドリフト・拡散・観測方程式を `lambdify` で JAX 関数へ自動変換。
+- `jax.lax.scan` を用いた GPU/CPU 互換のオイラー–丸山法シミュレータ。
+- 擬似尤度評価器（`V1`／`V1'`／`V2`／`V3`）を JAX で実装し、自動微分やベクトル化を活用可能。
+- JAX の勾配・ヘッシアンと NumPyro の NUTS を利用した推定ヘルパ（M 推定、ワンステップ、ベイズ推定）。
+- SymPy 配列向けユーティリティ（`ImmutableDenseNDimArray` 用 `einsum` など）。
+
+## ディレクトリ構成
+- `degenerate_sim/`
+  - `processes/degenerate_diffusion_process_jax.py`: 記号モデルと JAX シミュレータ。
+  - `evaluation/likelihood_evaluator_jax.py`: 擬似尤度評価器を生成するファクトリ関数。
+  - `estimation/parameter_estimator.py`: `m_estimate`、`one_step_estimate`、`bayes_estimate` を提供。
+  - `utils/einsum_sympy.py`: SymPy 向け `einsum` 実装（インポート時に簡易セルフテスト実行）。
+  - `__init__.py`: 主要クラス／関数の再エクスポート。
+- `FNmodel.ipynb`, `jax_study.ipynb`: モデル構築・シミュレーション・推定のノート。
+- `old/`: リファクタ以前の互換コード。歴史的ノートを再現するために残しています。
+- `pyproject.toml`, `uv.lock`: [uv](https://github.com/astral-sh/uv) を利用する場合のメタデータ。
+
+## 動作環境
+- Python 3.11 で動作確認。
+- 主な依存パッケージ: `jax`、`jaxlib`、`numpy`、`sympy`、`numpyro`、`matplotlib`（ノートブック用）。
+- 高次（`k > 3`）の擬似尤度を扱う際は 64bit 浮動小数点を有効にすることを推奨します。
+  ```python
+  from jax import config
+  config.update("jax_enable_x64", True)  # JAX をインポートする前に実行
+  ```
+  もしくは `JAX_ENABLE_X64=1` を環境変数として設定してください。
+
+## セットアップ手順
+### uv を使う場合
+```bash
+uv init .               # 初回のみ（pyproject が未整備なら）
+uv add jax jaxlib numpy sympy numpyro matplotlib
+uv sync
+source .venv/bin/activate
+```
+
+### pip を使う場合
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install jax jaxlib numpy sympy numpyro matplotlib
+```
+
+## クイックスタート
+```python
+import sympy as sp
+import jax.numpy as jnp
+from degenerate_sim import DegenerateDiffusionProcess, LikelihoodEvaluator
+from degenerate_sim.estimation import m_estimate, bayes_estimate
+
+# 1. SymPy でモデルを定義
+x0, y0 = sp.symbols("x0 y0")
+x = sp.Array([x0])
+y = sp.Array([y0])
+theta_1 = sp.Array([sp.symbols("sigma")])
+theta_2 = sp.Array([sp.symbols("kappa")])
+theta_3 = sp.Array([sp.symbols("mu")])
+A_expr = sp.Array([-theta_2[0] * x[0]])
+B_expr = sp.Array([[theta_1[0]]])
+H_expr = sp.Array([theta_3[0] * x[0]])
+process = DegenerateDiffusionProcess(x, y, theta_1, theta_2, theta_3, A_expr, B_expr, H_expr)
+
+# 2. シミュレーション
+true_theta = (
+    jnp.array([0.4], dtype=jnp.float64),
+    jnp.array([1.0], dtype=jnp.float64),
+    jnp.array([0.2], dtype=jnp.float64),
+)
+x_series, y_series = process.simulate(true_theta, t_max=100.0, h=0.1, burn_out=50.0, dt=1e-3)
+
+# 3. 擬似尤度評価器を作成
+likelihood = LikelihoodEvaluator(process)
+v1 = likelihood.make_quasi_likelihood_v1_evaluator(x_series, y_series, h=0.1, k=3)
+
+# 4a. M 推定（勾配上昇）
+def objective(theta_vec: jnp.ndarray) -> float:
+    return v1(theta_vec, true_theta[0], true_theta[1], true_theta[2])
+
+m_result = m_estimate(
+    objective_function=objective,
+    search_bounds=[(0.1, 0.7)],
+    initial_guess=jnp.array([0.3]),
+)
+
+# 4b. NumPyro (NUTS) によるベイズ推定
+bayes_result = bayes_estimate(
+    objective_function=objective,
+    search_bounds=[(0.1, 0.7)],
+    initial_guess=jnp.array([0.3]),
+    num_warmup=500,
+    num_samples=2000,
+    rng_seed=0,
+)
+```
+
+### `bayes_estimate` の補足
+- 境界の情報から一様／指数／正規の事前分布を自動で選択します。`prior_log_pdf` で任意の事前項を追加できます。
+- NumPyro の NUTS を使用するため、初回実行時は JIT コンパイルとウォームアップに時間がかかります。
+- `k` を大きくすると数値不安定が生じやすいため、64bit 精度の有効化を推奨します。
+
+## 推定 API まとめ
+- `m_estimate(objective_function, search_bounds, initial_guess, *, learning_rate=1e-2, max_iters=1000, tol=1e-6)`
+  - JAX の勾配で境界付き勾配上昇。各ステップで境界内にクリップ。
+- `one_step_estimate(objective_function, search_bounds, initial_estimator)`
+  - 勾配とヘッシアンを使ったニュートン 1 ステップ更新。
+- `bayes_estimate(objective_function, search_bounds, initial_guess, *, prior_log_pdf=None, num_warmup=1000, num_samples=2000, num_chains=1, rng_seed=0)`
+  - NumPyro の `MCMC(NUTS)` を呼び出し、事後サンプルの平均を返却。
+
+## ユーティリティとノート
+- `degenerate_sim.utils.einsum_sympy`: SymPy 配列向け `einsum` 実装。インポート時に自己テストが走ります。
+- `FNmodel.ipynb`: Fowler–Nordheim 型モデルを題材にした例示ノート。
+- `jax_study.ipynb`: JAX の挙動を検証したスケッチ。
+- `old/`: 過去のモジュール構成。古いノートを開く用途で残存。
+
+## 既知の課題 / TODO
+- `einsum_sympy.py` がインポート時にデモ計算を実行するため、副作用をテストへ移したい。
+- 擬似尤度クラスの警告出力が `print` に依存している。ロガーや例外クラスへの置換が課題。
+- 一部ノートブックは `old/` 配下の互換モジュールを参照している。`degenerate_sim` への移行を進める。
+- 高次擬似尤度（`k > 3`）は数値的に不安定なため、64bit 精度やパラメータスケーリングの検討が必要。
+
+改善提案や機能追加があれば Issue / Pull Request で共有してください。
