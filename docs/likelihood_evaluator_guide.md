@@ -13,7 +13,7 @@
   - 無限小生成作用素 \(L\) とその正規化 \(L_0\) を扱います。
   - SymPy の式を再利用するためのキャッシュを持ち、`L`, `L_0`, `L_0_func` を外部に提供します。
 - `QuasiLikelihoodEvaluator`
-  - JAX 上で疑似尤度を計算する各種ファクトリ (`make_quasi_likelihood_v*_evaluator`) を提供します。
+  - JAX 上で疑似尤度を計算する各種ファクトリ (`make_quasi_likelihood_l*_evaluator`) を提供します。
   - 各ファクトリの戻り値は JAX の `jit` 済み関数なので、生成後すぐ高速に評価／自動微分へ渡せます。
   - `S(k)` を呼び出すと、各テンソル成分の記号式と対応する JAX 関数をまとめた `SymbolicArtifact` のタプルが取得できます。
   - `SymbolicPrecomputation` を参照し、利用可能なコンポーネントを検査した上で evaluators を生成します。
@@ -52,7 +52,7 @@
    - C や V が特異な場合などは初期化時に `SymbolicPreparationError` が送出されるため、モデル式やパラメータを調整してください。
 
 4. **疑似尤度の evaluator を生成**
-   - `make_quasi_likelihood_v1_evaluator`, `make_quasi_likelihood_v1_prime_evaluator`, `make_quasi_likelihood_v2_evaluator`, `make_quasi_likelihood_v3_evaluator` を用途に応じて呼び出します。戻り値はすべて `jit` 済みの callable です。
+  - `make_quasi_likelihood_l1_evaluator`, `make_quasi_likelihood_l1_prime_evaluator`, `make_quasi_likelihood_l2_evaluator`, `make_quasi_likelihood_l3_evaluator` を用途に応じて呼び出します。戻り値はすべて `jit` 済みの callable です。
   - 必須成分が欠けている場合は初期化時点で `SymbolicPreparationError` が送出されるため、モデル式やパラメータを調整してください。
 
 5. **最適化ルーチンへ渡す**
@@ -82,12 +82,12 @@ V1 系の疑似尤度は高次の `S_l` テンソルを多数評価するため�
 
 | evaluator | 目的 | 要求される主なコンポーネント |
 |-----------|------|------------------------------|
-| `v1` (`make_quasi_likelihood_v1_evaluator`) | フル疑似尤度 | `inv_S0_*` 系、`log_det_S0` |
-| `v1_prime` (`make_quasi_likelihood_v1_prime_evaluator`) | 一部簡略化版 | `inv_C`, `log_det_C` |
-| `v2` (`make_quasi_likelihood_v2_evaluator`) |  \(\theta_2\) 向け | `inv_C` |
-| `v3` (`make_quasi_likelihood_v3_evaluator`) |  \(\theta_3\) 向け | `inv_V`, `partial_x_H^T V^{-1}` |
+| `l1` (`make_quasi_likelihood_l1_evaluator`) | フル疑似尤度 | `inv_S0_*` 系、`log_det_S0` |
+| `l1_prime` (`make_quasi_likelihood_l1_prime_evaluator`) | 一部簡略化版 | `inv_C`, `log_det_C` |
+| `l2` (`make_quasi_likelihood_l2_evaluator`) |  \(\theta_2\) 向け | `inv_C` |
+| `l3` (`make_quasi_likelihood_l3_evaluator`) |  \(\theta_3\) 向け | `inv_V`, `partial_x_H^T V^{-1}` |
 
-`v3` は特に `V` が特異な場合に初期化段階で失敗するため、`LikelihoodEvaluator` の生成時に `SymbolicPreparationError` を捕捉し、必要に応じてモデルの記号式を修正してください。
+`l3` は特に `V` が特異な場合に初期化段階で失敗するため、`LikelihoodEvaluator` の生成時に `SymbolicPreparationError` を捕捉し、必要に応じてモデルの記号式を修正してください。
 
 ## `L` / `L_0` の利用
 
@@ -100,11 +100,11 @@ V1 系の疑似尤度は高次の `S_l` テンソルを多数評価するため�
 ```python
 likelihood = LikelihoodEvaluator(FNmodel)
 
-v1 = likelihood.make_quasi_likelihood_v1_evaluator(
+lk1 = likelihood.make_quasi_likelihood_l1_evaluator(
     x_series=x_series, y_series=y_series, h=h, k=3
 )
 
-v3 = likelihood.make_quasi_likelihood_v3_evaluator(
+lk3 = likelihood.make_quasi_likelihood_l3_evaluator(
     x_series=x_series, y_series=y_series, h=h, k=3
 )
 ```

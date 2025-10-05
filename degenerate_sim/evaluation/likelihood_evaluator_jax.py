@@ -468,10 +468,10 @@ class QuasiLikelihoodEvaluator:
             return (n * h) ** (-1 / 2) + h**k
         return (h / n) ** (1 / 2) + h ** (k + 1)
 
-    def make_quasi_likelihood_v1_prime_evaluator(
+    def make_quasi_likelihood_l1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """`S_0` を省略した簡略版疑似尤度 V1' の評価関数を生成して返す。
+        """`S_0` を省略した簡略版疑似尤度 l1' の評価関数を生成して返す。
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -480,7 +480,7 @@ class QuasiLikelihoodEvaluator:
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            msg = "Time series length must be > 1 and shapes must match for V1'."
+            msg = "Time series length must be > 1 and shapes must match for l1'."
             raise ValueError(msg)
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
@@ -491,7 +491,7 @@ class QuasiLikelihoodEvaluator:
 
         d_x = self.model.x.shape[0]
 
-        def evaluate_v1_prime(
+        def evaluate_l1_prime(
             theta_1_val: jnp.ndarray,
             theta_1_bar: jnp.ndarray,
             theta_2_bar: jnp.ndarray,
@@ -552,12 +552,12 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_v1_prime)
+        return jax.jit(evaluate_l1_prime)
 
-    def make_quasi_likelihood_v1_evaluator(
+    def make_quasi_likelihood_l1_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """`S_0` の補正を含めた疑似尤度 V1 の評価関数を生成して返す。
+        """`S_0` の補正を含めた疑似尤度 l1 の評価関数を生成して返す。
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -566,7 +566,7 @@ class QuasiLikelihoodEvaluator:
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            msg = "Time series length must be > 1 and shapes must match for V1."
+            msg = "Time series length must be > 1 and shapes must match for l1."
             raise ValueError(msg)
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
@@ -585,7 +585,7 @@ class QuasiLikelihoodEvaluator:
         d_x = self.model.x.shape[0]
         d_y = self.model.y.shape[0]
 
-        def evaluate_v1(
+        def evaluate_l1(
             theta_1_val: jnp.ndarray,
             theta_1_bar: jnp.ndarray,
             theta_2_bar: jnp.ndarray,
@@ -690,12 +690,12 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_v1)
+        return jax.jit(evaluate_l1)
 
-    def make_quasi_likelihood_v2_evaluator(
+    def make_quasi_likelihood_l2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_2 を推定するための疑似尤度 V2 評価関数を生成する。
+        """パラメータ theta_2 を推定するための疑似尤度 l2 評価関数を生成する。
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -704,13 +704,13 @@ class QuasiLikelihoodEvaluator:
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            msg = "Time series length must be > 1 and shapes must match for V2."
+            msg = "Time series length must be > 1 and shapes must match for l2."
             raise ValueError(msg)
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
         invC_func = self.symbolics.inv_C.func
 
-        def evaluate_v2(
+        def evaluate_l2(
             theta_2_val: jnp.ndarray,
             theta_1_bar: jnp.ndarray,
             theta_2_bar: jnp.ndarray,
@@ -762,12 +762,12 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_v2)
+        return jax.jit(evaluate_l2)
 
-    def make_quasi_likelihood_v3_evaluator(
+    def make_quasi_likelihood_l3_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_3 を推定するための疑似尤度 V3 評価関数を生成する。
+        """パラメータ theta_3 を推定するための疑似尤度 l3 評価関数を生成する。
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -776,7 +776,7 @@ class QuasiLikelihoodEvaluator:
         n = x_series_jnp.shape[0]
         num_transitions = n - 1
         if num_transitions < 1 or y_series_jnp.shape[0] != n:
-            msg = "Time series length must be > 1 and shapes must match for V3."
+            msg = "Time series length must be > 1 and shapes must match for l3."
             raise ValueError(msg)
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
@@ -785,7 +785,7 @@ class QuasiLikelihoodEvaluator:
         invV_func = self.symbolics.inv_V.func
         pHTinvV_func = self.symbolics.partial_x_H_transpose_inv_V.func
 
-        def evaluate_v3(
+        def evaluate_l3(
             theta_3_val: jnp.ndarray,
             theta_1_bar: jnp.ndarray,
             theta_2_bar: jnp.ndarray,
@@ -832,9 +832,9 @@ class QuasiLikelihoodEvaluator:
                     k,
                 )
 
-                term1_V3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
-                term2_V3 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
-                step_likelihood = term1_V3 + term2_V3
+                term1_l3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
+                term2_l3 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
+                step_likelihood = term1_l3 + term2_l3
                 step_likelihood = jnp.where(
                     jnp.isfinite(step_likelihood),
                     step_likelihood,
@@ -858,7 +858,7 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_v3)
+        return jax.jit(evaluate_l3)
 
 
 class LikelihoodEvaluator:
@@ -897,26 +897,26 @@ class LikelihoodEvaluator:
         """`S` テンソルの記号式と JAX 評価関数をまとめた成果物を返す。"""
         return self.quasi.S(k)
 
-    def make_quasi_likelihood_v1_prime_evaluator(
+    def make_quasi_likelihood_l1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """簡略版疑似尤度 V1' の評価関数を生成して返す。"""
-        return self.quasi.make_quasi_likelihood_v1_prime_evaluator(x_series, y_series, h, k)
+        """簡略版疑似尤度 l1' の評価関数を生成して返す。"""
+        return self.quasi.make_quasi_likelihood_l1_prime_evaluator(x_series, y_series, h, k)
 
-    def make_quasi_likelihood_v1_evaluator(
+    def make_quasi_likelihood_l1_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """補正込みの疑似尤度 V1 の評価関数を生成して返す。"""
-        return self.quasi.make_quasi_likelihood_v1_evaluator(x_series, y_series, h, k)
+        """補正込みの疑似尤度 l1 の評価関数を生成して返す。"""
+        return self.quasi.make_quasi_likelihood_l1_evaluator(x_series, y_series, h, k)
 
-    def make_quasi_likelihood_v2_evaluator(
+    def make_quasi_likelihood_l2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_2 に特化した疑似尤度 V2 を評価する関数を生成する。"""
-        return self.quasi.make_quasi_likelihood_v2_evaluator(x_series, y_series, h, k)
+        """パラメータ theta_2 に特化した疑似尤度 l2 を評価する関数を生成する。"""
+        return self.quasi.make_quasi_likelihood_l2_evaluator(x_series, y_series, h, k)
 
-    def make_quasi_likelihood_v3_evaluator(
+    def make_quasi_likelihood_l3_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
-        """パラメータ theta_3 に特化した疑似尤度 V3 を評価する関数を生成する。"""
-        return self.quasi.make_quasi_likelihood_v3_evaluator(x_series, y_series, h, k)
+        """パラメータ theta_3 に特化した疑似尤度 l3 を評価する関数を生成する。"""
+        return self.quasi.make_quasi_likelihood_l3_evaluator(x_series, y_series, h, k)

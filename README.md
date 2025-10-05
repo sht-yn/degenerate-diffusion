@@ -75,7 +75,7 @@ x_series, y_series = process.simulate(true_theta, t_max=100.0, h=0.1, burn_out=5
 
 # 3. 擬似尤度評価器を作成
 likelihood = LikelihoodEvaluator(process)
-v1 = likelihood.make_quasi_likelihood_v1_evaluator(x_series, y_series, h=0.1, k=3)
+l1 = likelihood.make_quasi_likelihood_l1_evaluator(x_series, y_series, h=0.1, k=3)
 
 # 4a. M 推定（勾配上昇）
 def objective(theta_vec: jnp.ndarray) -> float:
