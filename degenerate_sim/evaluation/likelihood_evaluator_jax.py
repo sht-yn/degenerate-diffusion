@@ -459,6 +459,15 @@ class QuasiLikelihoodEvaluator:
         self._S_cache[k] = result
         return result
 
+    @staticmethod
+    def a(n: int, h: float, k: int, i: int) -> float:
+        "a_n^hを計算する"
+        if i == 1:
+            return n ** (-1 / 2) + h**k
+        if i == 2:  # noqa: PLR2004
+            return (n * h) ** (-1 / 2) + h**k
+        return (h / n) ** (1 / 2) + h ** (k + 1)
+
     def make_quasi_likelihood_v1_prime_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
     ) -> Callable:
@@ -536,7 +545,11 @@ class QuasiLikelihoodEvaluator:
             scan_inputs = (x_series_jnp[1:], x_series_jnp[:-1], y_series_jnp[:-1])
             total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
             if num_transitions > 0:
-                return total_log_likelihood / (2.0 * num_transitions)
+                return (
+                    total_log_likelihood
+                    / (2.0 * num_transitions)
+                    / (self.a(num_transitions, h, k, 1) ** 2)
+                )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return jax.jit(evaluate_v1_prime)
@@ -670,7 +683,11 @@ class QuasiLikelihoodEvaluator:
             )
             total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
             if num_transitions > 0:
-                return total_log_likelihood / (2.0 * num_transitions)
+                return (
+                    total_log_likelihood
+                    / (2.0 * num_transitions)
+                    / (self.a(num_transitions, h, k, 1) ** 2)
+                )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return jax.jit(evaluate_v1)
@@ -738,7 +755,11 @@ class QuasiLikelihoodEvaluator:
             scan_inputs = (x_series_jnp[1:], x_series_jnp[:-1], y_series_jnp[:-1])
             total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
             if num_transitions > 0 and h > 0:
-                return total_log_likelihood / (2.0 * h * num_transitions)
+                return (
+                    total_log_likelihood
+                    / (2.0 * h * num_transitions)
+                    / (self.a(num_transitions, h, k, 2) ** 2)
+                )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return jax.jit(evaluate_v2)
@@ -830,7 +851,11 @@ class QuasiLikelihoodEvaluator:
             )
             total_log_likelihood, _ = lax.scan(scan_body, initial_total, scan_inputs)
             if num_transitions > 0 and h != 0:
-                return (6.0 * h * total_log_likelihood) / num_transitions
+                return (
+                    (6.0 * h * total_log_likelihood)
+                    / num_transitions
+                    / (self.a(num_transitions, h, k, 3) ** 2)
+                )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
         return jax.jit(evaluate_v3)

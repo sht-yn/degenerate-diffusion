@@ -60,3 +60,34 @@ theta_hat = m_estimate_jax(
 - 目的関数の値が最大化対象であることを確認してください。最小化の場合は符号を反転させてください。
 - 勾配計算が不安定な場合は、`search_bounds` の設定や初期値、ステップ幅を調整すると収束しやすくなります。
 - JAXopt 版を使う際は `pip install jaxopt` などで事前にライブラリを導入してください。
+
+## `bayes_estimate`
+
+確率的なパラメータ推定を行うラッパで、NumPyro の NUTS + MCMC を内部で実行します。使用例は次の通りです。
+
+```python
+from degenerate_sim.estimation.parameter_estimator import bayes_estimate
+
+theta_posterior_mean = bayes_estimate(
+    objective_function=my_log_likelihood,  # theta -> log p(data | theta)
+    search_bounds=[(0.0, 1.0), (None, None)],
+    initial_guess=[0.4, 0.1],
+    prior_log_pdf=None,  # 追加の対数事前項があれば callable を渡す
+    num_warmup=1_000,
+    num_samples=2_000,
+    num_chains=2,
+    rng_seed=2024,
+)
+```
+
+### `model()` クロージャが行っていること
+
+`bayes_estimate` 内部では引数を束縛した `model()` を定義し、NumPyro のサンプリングに渡しています。主要な処理は以下の通りです。
+
+1. **事前分布の自動生成** — `search_bounds` を `_normalize_bounds` で整形し、各パラメータの `(low, high)` から `_prior_from_bounds` が適切な事前分布を構築します。有限区間は一様、片側無限は指数分布のアフィン変換、両側無限は広い正規分布が選ばれます。
+2. **パラメータのサンプリング** — `numpyro.sample(f"theta_{i}", prior)` を順に呼び、パラメータベクトル `theta` を得ます。
+3. **目的関数のログ尤度化** — ユーザー提供の `objective_function(theta)` を評価し、その出力を `numpyro.factor("log_likelihood", ...)` で joint log-density に足し込みます。ここでは自前で評価した対数尤度（未正規化でも可）を追加するスタイルです。
+4. **任意の追加事前項** — `prior_log_pdf` が渡されていれば `numpyro.factor("user_prior", ...)` で同様に加算します。
+5. **サンプルの保持** — `numpyro.deterministic("theta", theta)` により、サンプル辞書から `samples["theta"]` としてパラメータを取り出せるようにしています。
+
+NUTS と MCMC の組み合わせは `kernel = infer.NUTS(model)`、`mcmc = infer.MCMC(kernel, ...)` の順で構築され、`mcmc.run(rng_key)` により事後サンプルが生成されます。返り値は事後平均 `np.ndarray` ですが、必要に応じて `mcmc.get_samples()` から生のサンプルを再利用できます。

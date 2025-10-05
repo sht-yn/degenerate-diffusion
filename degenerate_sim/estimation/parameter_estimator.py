@@ -46,6 +46,147 @@ def _clip(theta: Array1D, bounds: jnp.ndarray) -> Array1D:
     return jnp.clip(theta, lows, highs)
 
 
+def newton_solve(
+    objective_function: Callable[[Array1D], float],
+    search_bounds: Bounds,
+    initial_guess: Sequence[float],
+    *,
+    max_iters: int = 100,
+    tol: float = 1e-6,
+    damping: float = 1.0,
+    log_interval: int | None = None,
+) -> np.ndarray:
+    """多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。
+
+    ``damping`` を 1 未満にすると過大ステップを抑えられる。解が境界の外に出そうな場合でも
+    ``_clip`` で常に ``search_bounds`` 内に戻す。
+    """
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta = jnp.asarray(initial_guess)
+    if theta.shape != (bounds_raw.shape[0],):
+        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
+        raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta.dtype)
+
+    def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
+        grad_val = jax.grad(objective_function)(theta_val)
+        hessian_val = jax.hessian(objective_function)(theta_val)
+        return grad_val, hessian_val
+
+    for iteration in range(1, max_iters + 1):
+        grad_val, hessian_val = grad_and_hessian(theta)
+        grad_norm = float(jnp.linalg.norm(grad_val))
+        if log_interval and iteration % log_interval == 0:
+            print(f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}")
+        if grad_norm <= tol:
+            break
+
+        eye = jnp.eye(theta.shape[0])
+        # 解析的に非正定な Hessian でも解けるように微小対角成分を加える。
+        hessian_safe = hessian_val + 1e-8 * eye
+        delta = jnp.linalg.solve(hessian_safe, grad_val)
+        theta = theta - damping * delta
+        theta = _clip(theta, bounds)
+
+    return np.asarray(theta)
+
+
+def one_step_estimate(
+    objective_function: Callable[[Array1D], float],
+    search_bounds: Bounds,
+    initial_estimator: Sequence[float],
+) -> np.ndarray:
+    """Single Newton step using JAX gradients and Hessians."""
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta0 = jnp.asarray(initial_estimator)
+
+    if theta0.shape != (bounds_raw.shape[0],):
+        msg = f"initial_estimator must have shape ({bounds_raw.shape[0]},)."
+        raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta0.dtype)
+
+    grad = jax.grad(objective_function)(theta0)
+    hessian = jax.hessian(objective_function)(theta0)
+
+    eye = jnp.eye(theta0.shape[0])
+    hessian_safe = hessian + 1e-8 * eye
+    delta = jnp.linalg.solve(hessian_safe, grad)
+    theta_new = theta0 - delta
+    theta_new = _clip(theta_new, bounds)
+    return np.asarray(theta_new)
+
+
+def _prior_from_bounds(low: float, high: float) -> dist.Distribution:
+    if math.isfinite(low) and math.isfinite(high):
+        return dist.Uniform(low, high)
+    if math.isfinite(low):
+        return dist.TransformedDistribution(
+            dist.Exponential(1.0), transforms.AffineTransform(low, 1.0)
+        )
+    if math.isfinite(high):
+        return dist.TransformedDistribution(
+            dist.Exponential(1.0),
+            transforms.AffineTransform(high, -1.0),
+        )
+    return dist.Normal(0.0, 10.0)
+
+
+def bayes_estimate(
+    objective_function: Callable[[Array1D], float],
+    search_bounds: Bounds,
+    initial_guess: Sequence[float],
+    *,
+    prior_log_pdf: Callable[[Array1D], float] | None = None,
+    num_warmup: int = 1000,
+    num_samples: int = 3000,
+    num_chains: int = 1,
+    rng_seed: int = 0,
+) -> np.ndarray:
+    """Bayesian estimation via NumPyro and JAX."""
+    bounds_raw = _normalize_bounds(search_bounds)
+    theta0 = jnp.asarray(initial_guess)
+
+    if theta0.shape != (bounds_raw.shape[0],):
+        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
+        raise ValueError(msg)
+
+    bounds = bounds_raw.astype(theta0.dtype)
+    bounds_np = np.asarray(bounds)
+
+    def model() -> None:
+        theta_components = []
+        for i in range(bounds_np.shape[0]):
+            low = float(bounds_np[i, 0])
+            high = float(bounds_np[i, 1])
+            prior = _prior_from_bounds(low, high)
+            theta_i = numpyro.sample(f"theta_{i}", prior)
+            theta_components.append(theta_i)
+        theta = jnp.stack(theta_components)
+        log_like = jnp.asarray(objective_function(theta))
+        numpyro.factor("log_likelihood", log_like)
+        if prior_log_pdf is not None:
+            numpyro.factor("user_prior", jnp.asarray(prior_log_pdf(theta)))
+        numpyro.deterministic("theta", theta)
+
+    nuts_kernel = infer.NUTS(model)
+    mcmc = infer.MCMC(
+        nuts_kernel,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
+        progress_bar=False,
+    )
+    rng_key = jax.random.PRNGKey(rng_seed)
+    mcmc.run(rng_key)
+    samples = mcmc.get_samples()
+    theta_components = [samples[f"theta_{i}"] for i in range(bounds.shape[0])]
+    theta_stack = jnp.stack(theta_components, axis=-1)
+    posterior_mean = jnp.mean(theta_stack, axis=0)
+    return np.asarray(posterior_mean)
+
+
 def m_estimate(
     objective_function: Callable[[Array1D], float],
     search_bounds: Bounds,
@@ -193,143 +334,6 @@ def m_estimate_jax(
 
     theta_opt, _, _ = _run(theta0)
     return np.asarray(theta_opt)
-
-
-def one_step_estimate(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_estimator: Sequence[float],
-) -> np.ndarray:
-    """Single Newton step using JAX gradients and Hessians."""
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_estimator)
-
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_estimator must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta0.dtype)
-
-    grad = jax.grad(objective_function)(theta0)
-    hessian = jax.hessian(objective_function)(theta0)
-
-    eye = jnp.eye(theta0.shape[0])
-    hessian_safe = hessian + 1e-6 * eye
-    delta = jnp.linalg.solve(hessian_safe, grad)
-    theta_new = theta0 - delta
-    theta_new = _clip(theta_new, bounds)
-    return np.asarray(theta_new)
-
-
-def newton_solve(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
-    *,
-    max_iters: int = 100,
-    tol: float = 1e-6,
-    damping: float = 1.0,
-    log_interval: int | None = None,
-) -> np.ndarray:
-    """多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。
-
-    ``damping`` を 1 未満にすると過大ステップを抑えられる。解が境界の外に出そうな場合でも
-    ``_clip`` で常に ``search_bounds`` 内に戻す。
-    """
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta = jnp.asarray(initial_guess)
-    if theta.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta.dtype)
-
-    def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
-        grad_val = jax.grad(objective_function)(theta_val)
-        hessian_val = jax.hessian(objective_function)(theta_val)
-        return grad_val, hessian_val
-
-    for iteration in range(1, max_iters + 1):
-        grad_val, hessian_val = grad_and_hessian(theta)
-        grad_norm = float(jnp.linalg.norm(grad_val))
-        if log_interval and iteration % log_interval == 0:
-            print(f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}")
-        if grad_norm <= tol:
-            break
-
-        eye = jnp.eye(theta.shape[0])
-        # 解析的に非正定な Hessian でも解けるように微小対角成分を加える。
-        hessian_safe = hessian_val + 1e-6 * eye
-        delta = jnp.linalg.solve(hessian_safe, grad_val)
-        theta = theta - damping * delta
-        theta = _clip(theta, bounds)
-
-    return np.asarray(theta)
-
-
-def _prior_from_bounds(low: float, high: float) -> dist.Distribution:
-    if math.isfinite(low) and math.isfinite(high):
-        return dist.Uniform(low, high)
-    if math.isfinite(low):
-        return dist.TransformedDistribution(
-            dist.Exponential(1.0), transforms.AffineTransform(low, 1.0)
-        )
-    if math.isfinite(high):
-        return dist.TransformedDistribution(
-            dist.Exponential(1.0),
-            transforms.AffineTransform(high, -1.0),
-        )
-    return dist.Normal(0.0, 10.0)
-
-
-def bayes_estimate(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
-    *,
-    prior_log_pdf: Callable[[Array1D], float] | None = None,
-    num_warmup: int = 1000,
-    num_samples: int = 2000,
-    num_chains: int = 1,
-    rng_seed: int = 0,
-) -> np.ndarray:
-    """Bayesian estimation via NumPyro and JAX."""
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess)
-
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta0.dtype)
-    bounds_np = np.asarray(bounds)
-
-    def model() -> None:
-        theta_components = []
-        for i in range(bounds_np.shape[0]):
-            low = float(bounds_np[i, 0])
-            high = float(bounds_np[i, 1])
-            prior = _prior_from_bounds(low, high)
-            theta_i = numpyro.sample(f"theta_{i}", prior)
-            theta_components.append(theta_i)
-        theta = jnp.stack(theta_components)
-        log_like = jnp.asarray(objective_function(theta))
-        numpyro.factor("log_likelihood", log_like)
-        if prior_log_pdf is not None:
-            numpyro.factor("user_prior", jnp.asarray(prior_log_pdf(theta)))
-        numpyro.deterministic("theta", theta)
-
-    nuts_kernel = infer.NUTS(model)
-    mcmc = infer.MCMC(
-        nuts_kernel, num_warmup=num_warmup, num_samples=num_samples, num_chains=num_chains
-    )
-    rng_key = jax.random.PRNGKey(rng_seed)
-    mcmc.run(rng_key)
-    samples = mcmc.get_samples()
-    theta_components = [samples[f"theta_{i}"] for i in range(bounds.shape[0])]
-    theta_stack = jnp.stack(theta_components, axis=-1)
-    posterior_mean = jnp.mean(theta_stack, axis=0)
-    return np.asarray(posterior_mean)
 
 
 __all__ = [
