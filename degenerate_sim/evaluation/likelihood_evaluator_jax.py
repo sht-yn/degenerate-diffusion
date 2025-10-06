@@ -375,15 +375,34 @@ class QuasiLikelihoodEvaluator:
         theta_3_bar: jnp.ndarray,
         h: float,
         k_arg: int,
+        *,
+        i: int | None = None,
     ) -> jnp.ndarray:
         r"""疑似尤度で利用する \(\Delta y\) をスケール済みで算出する。"""
         if h <= 0:
             return jnp.zeros_like(y_j, dtype=y_j.dtype)
         DY_SCALE = jnp.power(h, -1.5)
         D_y = DY_SCALE * (y_j - y_j_1)
+        if i == None:
+            if k_arg >= 1:
+                H_val = self.model.H_func(x_j_1, y_j_1, theta_3_val)
+                args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                L0_y_m_val = L0_y_funcs[2](*args_for_L0_bar)
+                D_y -= DY_SCALE * (jnp.power(h, 1.0) * H_val + jnp.power(h, 2.0) * L0_y_m_val)
+            if k_arg >= 2:
+                args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                for m_loop in range(3, k_arg + 2):
+                    if m_loop >= len(L0_y_funcs):
+                        raise IndexError(
+                            f"Dy_func requested L0_y_funcs[{m_loop}] but only {len(L0_y_funcs)} terms are available."
+                        )
+                    h_pow_m = jnp.power(h, float(m_loop))
+                    L0_y_m_val = L0_y_funcs[m_loop](*args_for_L0_bar)
+                    D_y -= DY_SCALE * h_pow_m * L0_y_m_val
+            return D_y
         if k_arg >= 1:
             H_val = self.model.H_func(x_j_1, y_j_1, theta_3_val)
-            D_y -= DY_SCALE * jnp.power(h, 1.0) * H_val
+            D_y -= DY_SCALE * (jnp.power(h, 1.0) * H_val)
         if k_arg >= 2:
             args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
             for m_loop in range(2, k_arg + 2):
@@ -621,7 +640,7 @@ class QuasiLikelihoodEvaluator:
                     theta_2_bar,
                     theta_3_bar,
                     h,
-                    k - 1,
+                    k,
                 )
                 Dy_val = self.Dy_func(
                     L0_y_funcs,
@@ -633,7 +652,7 @@ class QuasiLikelihoodEvaluator:
                     theta_2_bar,
                     theta_3_bar,
                     h,
-                    k - 1,
+                    k,
                 )
 
                 sum_S_xx = jnp.zeros((d_x, d_x), dtype=inv_S0_xx_val.dtype)
@@ -830,6 +849,7 @@ class QuasiLikelihoodEvaluator:
                     theta_3_bar,
                     h,
                     k,
+                    i=3,
                 )
 
                 term1_l3 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
