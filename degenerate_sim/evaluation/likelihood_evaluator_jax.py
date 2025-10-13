@@ -386,7 +386,7 @@ class QuasiLikelihoodEvaluator:
         if i == None:
             if k_arg >= 1:
                 H_val = self.model.H_func(x_j_1, y_j_1, theta_3_val)
-                args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_val)
                 L0_y_m_val = L0_y_funcs[2](*args_for_L0_bar)
                 D_y -= DY_SCALE * (jnp.power(h, 1.0) * H_val + jnp.power(h, 2.0) * L0_y_m_val)
             if k_arg >= 2:
@@ -574,7 +574,13 @@ class QuasiLikelihoodEvaluator:
         return jax.jit(evaluate_l1_prime)
 
     def make_quasi_likelihood_l1_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+        self,
+        x_series: jnp.ndarray,
+        y_series: jnp.ndarray,
+        h: float,
+        k: int,
+        *,
+        my_setting: bool = True,
     ) -> Callable:
         """`S_0` の補正を含めた疑似尤度 l1 の評価関数を生成して返す。
 
@@ -588,13 +594,18 @@ class QuasiLikelihoodEvaluator:
             msg = "Time series length must be > 1 and shapes must match for l1."
             raise ValueError(msg)
 
-        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
-        L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 2))
-        S_funcs = tuple(
-            (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
-            for l_s in range(1, k)
-        )
-
+        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
+        L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 1))
+        if my_setting:
+            S_funcs = tuple(
+                (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
+                for l_s in range(1, k)
+            )
+        else:
+            S_funcs = tuple(
+                (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
+                for l_s in range(1, k - 1)
+            )
         inv_S0_xx_func = self.symbolics.inv_S0_xx.func
         inv_S0_xy_func = self.symbolics.inv_S0_xy.func
         inv_S0_yx_func = self.symbolics.inv_S0_yx.func
@@ -640,7 +651,7 @@ class QuasiLikelihoodEvaluator:
                     theta_2_bar,
                     theta_3_bar,
                     h,
-                    k,
+                    k - 1,
                 )
                 Dy_val = self.Dy_func(
                     L0_y_funcs,
@@ -652,7 +663,7 @@ class QuasiLikelihoodEvaluator:
                     theta_2_bar,
                     theta_3_bar,
                     h,
-                    k,
+                    k - 1,
                 )
 
                 sum_S_xx = jnp.zeros((d_x, d_x), dtype=inv_S0_xx_val.dtype)
@@ -924,10 +935,17 @@ class LikelihoodEvaluator:
         return self.quasi.make_quasi_likelihood_l1_prime_evaluator(x_series, y_series, h, k)
 
     def make_quasi_likelihood_l1_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
+        self,
+        x_series: jnp.ndarray,
+        y_series: jnp.ndarray,
+        h: float,
+        k: int,
+        my_setting: bool = True,
     ) -> Callable:
         """補正込みの疑似尤度 l1 の評価関数を生成して返す。"""
-        return self.quasi.make_quasi_likelihood_l1_evaluator(x_series, y_series, h, k)
+        return self.quasi.make_quasi_likelihood_l1_evaluator(
+            x_series, y_series, h, k, my_setting=my_setting
+        )
 
     def make_quasi_likelihood_l2_evaluator(
         self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int

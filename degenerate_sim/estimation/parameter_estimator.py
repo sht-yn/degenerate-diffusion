@@ -51,10 +51,13 @@ def newton_solve(
     search_bounds: Bounds,
     initial_guess: Sequence[float],
     *,
-    max_iters: int = 100,
-    tol: float = 1e-6,
-    damping: float = 1.0,
+    max_iters: int = 10000,
+    tol: float = 1e-7,
+    damping: float = 0.1,
     log_interval: int | None = None,
+    fallback_learning_rate: float = 1e-5,
+    fallback_weight_decay: float = 0.0,
+    clip_norm: float = 1e2,
 ) -> np.ndarray:
     """多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。
 
@@ -69,10 +72,26 @@ def newton_solve(
 
     bounds = bounds_raw.astype(theta.dtype)
 
+    if fallback_learning_rate <= 0.0:
+        msg = "fallback_learning_rate must be positive."
+        raise ValueError(msg)
+    if clip_norm <= 0.0:
+        msg = "clip_norm must be positive."
+        raise ValueError(msg)
+
+    adamw_transform = optax.adamw(
+        learning_rate=fallback_learning_rate,
+        weight_decay=fallback_weight_decay,
+    )
+    optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), adamw_transform)
+    opt_state = optimizer.init(theta)
+
     def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
         grad_val = jax.grad(objective_function)(theta_val)
         hessian_val = jax.hessian(objective_function)(theta_val)
         return grad_val, hessian_val
+
+    eps = 1e-8
 
     for iteration in range(1, max_iters + 1):
         grad_val, hessian_val = grad_and_hessian(theta)
@@ -83,10 +102,26 @@ def newton_solve(
             break
 
         eye = jnp.eye(theta.shape[0])
-        # 解析的に非正定な Hessian でも解けるように微小対角成分を加える。
-        hessian_safe = hessian_val + 1e-8 * eye
-        delta = jnp.linalg.solve(hessian_safe, grad_val)
-        theta = theta - damping * delta
+        hessian_sym = 0.5 * (hessian_val + hessian_val.T)
+        eigvals = jnp.linalg.eigvalsh(hessian_sym)
+        max_eig = jnp.max(eigvals)
+        all_negative = max_eig < 0
+
+        opt_update, opt_state_candidate = optimizer.update(-grad_val, opt_state, theta)
+
+        if all_negative:
+            # Newton ステップ (自然勾配) を実行。数値安定化のため微小対角成分を加える。
+            hessian_safe = hessian_sym - eps * eye
+            delta = jnp.linalg.solve(hessian_safe, grad_val)
+            theta = theta - damping * delta
+            opt_state = opt_state_candidate
+        else:
+            # 曲率が反転している場合は一次法にフォールバック。
+            if log_interval and iteration % log_interval == 0:
+                print("  -> fallback to AdamW step with gradient clipping (indefinite Hessian)")
+            theta = optax.apply_updates(theta, opt_update)
+            opt_state = opt_state_candidate
+
         theta = _clip(theta, bounds)
 
     return np.asarray(theta)
