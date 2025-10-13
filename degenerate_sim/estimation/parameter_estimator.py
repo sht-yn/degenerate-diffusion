@@ -13,6 +13,7 @@ import numpyro.distributions as dist
 import optax
 from numpyro import infer
 from numpyro.distributions import transforms
+from numpyro.infer import init_to_sample
 
 PAIR_LENGTH = 2
 
@@ -178,6 +179,7 @@ def bayes_estimate(
     num_samples: int = 3000,
     num_chains: int = 1,
     rng_seed: int = 0,
+    init_strategy: Callable[..., object] | None = None,
 ) -> np.ndarray:
     """Bayesian estimation via NumPyro and JAX."""
     bounds_raw = _normalize_bounds(search_bounds)
@@ -205,7 +207,8 @@ def bayes_estimate(
             numpyro.factor("user_prior", jnp.asarray(prior_log_pdf(theta)))
         numpyro.deterministic("theta", theta)
 
-    nuts_kernel = infer.NUTS(model)
+    strategy = init_strategy or init_to_sample()
+    nuts_kernel = infer.NUTS(model, init_strategy=strategy)
     mcmc = infer.MCMC(
         nuts_kernel,
         num_warmup=num_warmup,

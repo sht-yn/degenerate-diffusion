@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import csv
+import re
 import typing as _typing
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import cloudpickle
 import jax.numpy as jnp
+import sympy as sp
 from tqdm.auto import tqdm
 
 from degenerate_sim.estimation.parameter_estimator import (
@@ -32,10 +36,14 @@ else:  # pragma: no cover - runtime fallback for type-only imports
 EstimatorKind = Literal["M", "B", "S"]
 
 TRUTH_PHASE = "__truth__"
+META_PHASE = "__meta__"
 
 THETA_COMPONENT_1 = 1
 THETA_COMPONENT_2 = 2
 THETA_COMPONENT_3 = 3
+
+
+_PROCESS_POOL_STATE: dict[str, object] = {}
 
 
 @dataclass(frozen=True)
@@ -67,6 +75,28 @@ class IterationEstimate:
     k: int
     theta_stage0: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
     theta_final: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+
+
+def _process_pool_initializer(serialized_algorithm: bytes) -> None:
+    _PROCESS_POOL_STATE["algorithm"] = cloudpickle.loads(serialized_algorithm)
+
+
+def _process_pool_run_single_seed(
+    seed: int,
+    plan: dict[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+    k_0: int,
+    initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+    *,
+    my_setting: bool,
+) -> list[IterationEstimate]:
+    algorithm: LoopEstimationAlgorithm = _PROCESS_POOL_STATE["algorithm"]
+    return algorithm.run_single_seed(
+        seed=seed,
+        plan=plan,
+        k_0=k_0,
+        initial_theta_stage0=initial_theta_stage0,
+        my_setting=my_setting,
+    )
 
 
 class LoopEstimationAlgorithm:
@@ -119,6 +149,7 @@ class LoopEstimationAlgorithm:
         show_progress: bool = False,
         progress_desc: str | None = None,
         progress_position: int | None = None,
+        num_workers: int | None = None,
     ) -> dict[int, cabc.Sequence[IterationEstimate]]:
         """Execute the iterative estimation scheme for each seed.
 
@@ -138,6 +169,10 @@ class LoopEstimationAlgorithm:
             progress_desc: Optional custom description shown alongside the
                 progress bar.
             progress_position: Optional row position for nested progress bars.
+            num_workers: When greater than one, parallelises the per-seed
+                computations using a thread pool with the specified maximum
+                workers. A value of ``None`` or ``1`` preserves sequential
+                execution.
 
         Returns:
             A dictionary mapping each seed to a sequence of
@@ -145,93 +180,294 @@ class LoopEstimationAlgorithm:
             estimates for every iteration.
 
         """
-        results: dict[int, list[IterationEstimate]] = {}
         seeds_sequence = list(seeds)
+        if not seeds_sequence:
+            return {}
+
+        use_process_parallel = (
+            num_workers is not None and num_workers > 1 and _contains_bayesian_estimators(plan)
+        )
+
+        if use_process_parallel:
+            return self._run_parallel_process(
+                seeds_sequence,
+                plan,
+                k_0,
+                initial_theta_stage0,
+                my_setting=my_setting,
+                show_progress=show_progress,
+                progress_desc=progress_desc,
+                progress_position=progress_position,
+                num_workers=num_workers,
+            )
+
+        use_thread_parallel = num_workers is not None and num_workers > 1
+        if use_thread_parallel:
+            return self._run_parallel(
+                seeds_sequence,
+                plan,
+                k_0,
+                initial_theta_stage0,
+                my_setting=my_setting,
+                show_progress=show_progress,
+                progress_desc=progress_desc,
+                progress_position=progress_position,
+                num_workers=num_workers,
+            )
+        return self._run_sequential(
+            seeds_sequence,
+            plan,
+            k_0,
+            initial_theta_stage0,
+            my_setting=my_setting,
+            show_progress=show_progress,
+            progress_desc=progress_desc,
+            progress_position=progress_position,
+        )
+
+    def _run_sequential(
+        self,
+        seeds_sequence: cabc.Sequence[int],
+        plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+        k_0: int,
+        initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+        *,
+        my_setting: bool,
+        show_progress: bool,
+        progress_desc: str | None,
+        progress_position: int | None,
+    ) -> dict[int, list[IterationEstimate]]:
+        results: dict[int, list[IterationEstimate]] = {}
         iterator: cabc.Iterable[int]
+        progress_bar: tqdm | None = None
         if show_progress:
-            iterator = tqdm(
+            progress_bar = tqdm(
                 seeds_sequence,
                 desc=progress_desc or "Estimating seeds",
                 unit="seed",
                 position=progress_position,
                 leave=False,
             )
+            iterator = progress_bar
         else:
             iterator = seeds_sequence
 
-        for seed in iterator:
-            observation = self._simulate_observation(seed)
-            stage0_prev = tuple(jnp.asarray(theta) for theta in initial_theta_stage0)
-            iterations: list[IterationEstimate] = []
-            for k in range(1, k_0 + 1):
-                if k not in plan:
-                    msg = f"Plan does not contain estimator triple for k={k}."
-                    raise KeyError(msg)
-                theta1_k0 = self._estimate_component(
-                    estimator_kind=plan[k][0],
-                    component=1,
-                    k_arg=k,
-                    observation=observation,
-                    theta_bar=stage0_prev,
-                    initial_guess=stage0_prev[0],
-                    use_prime_objective=True,
+        try:
+            for seed in iterator:
+                results[seed] = self._run_single_seed(
+                    seed=seed,
+                    plan=plan,
+                    k_0=k_0,
+                    initial_theta_stage0=initial_theta_stage0,
                     my_setting=my_setting,
                 )
-                theta2_k0 = self._estimate_component(
-                    estimator_kind=plan[k][1],
-                    component=2,
-                    k_arg=k,
-                    observation=observation,
-                    theta_bar=(theta1_k0, stage0_prev[1], stage0_prev[2]),
-                    initial_guess=stage0_prev[1],
-                )
-                theta3_k0 = self._estimate_component(
-                    estimator_kind=plan[k][2],
+        finally:
+            if progress_bar is not None:
+                progress_bar.close()
+        return results
+
+    def _run_parallel(
+        self,
+        seeds_sequence: cabc.Sequence[int],
+        plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+        k_0: int,
+        initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+        *,
+        my_setting: bool,
+        show_progress: bool,
+        progress_desc: str | None,
+        progress_position: int | None,
+        num_workers: int,
+    ) -> dict[int, list[IterationEstimate]]:
+        progress_bar: tqdm | None = None
+        if show_progress:
+            progress_bar = tqdm(
+                total=len(seeds_sequence),
+                desc=progress_desc or "Estimating seeds",
+                unit="seed",
+                position=progress_position,
+                leave=False,
+            )
+
+        results_parallel: dict[int, list[IterationEstimate]] = {}
+        try:
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future_to_seed = {
+                    executor.submit(
+                        self._run_single_seed,
+                        seed=seed,
+                        plan=plan,
+                        k_0=k_0,
+                        initial_theta_stage0=initial_theta_stage0,
+                        my_setting=my_setting,
+                    ): seed
+                    for seed in seeds_sequence
+                }
+                for future in as_completed(future_to_seed):
+                    seed = future_to_seed[future]
+                    results_parallel[seed] = future.result()
+                    if progress_bar is not None:
+                        progress_bar.update(1)
+        finally:
+            if progress_bar is not None:
+                progress_bar.close()
+
+        return results_parallel
+
+    def _run_parallel_process(
+        self,
+        seeds_sequence: cabc.Sequence[int],
+        plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+        k_0: int,
+        initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+        *,
+        my_setting: bool,
+        show_progress: bool,
+        progress_desc: str | None,
+        progress_position: int | None,
+        num_workers: int,
+    ) -> dict[int, list[IterationEstimate]]:
+        progress_bar: tqdm | None = None
+        if show_progress:
+            progress_bar = tqdm(
+                total=len(seeds_sequence),
+                desc=progress_desc or "Estimating seeds",
+                unit="seed",
+                position=progress_position,
+                leave=False,
+            )
+
+        results_parallel: dict[int, list[IterationEstimate]] = {}
+
+        plan_serializable = {int(k): tuple(v) for k, v in plan.items()}
+        serialized_algorithm = cloudpickle.dumps(self)
+
+        try:
+            with ProcessPoolExecutor(
+                max_workers=num_workers,
+                initializer=_process_pool_initializer,
+                initargs=(serialized_algorithm,),
+            ) as executor:
+                future_to_seed = {
+                    executor.submit(
+                        _process_pool_run_single_seed,
+                        seed,
+                        plan_serializable,
+                        k_0,
+                        initial_theta_stage0,
+                        my_setting=my_setting,
+                    ): seed
+                    for seed in seeds_sequence
+                }
+                for future in as_completed(future_to_seed):
+                    seed = future_to_seed[future]
+                    results_parallel[seed] = future.result()
+                    if progress_bar is not None:
+                        progress_bar.update(1)
+        finally:
+            if progress_bar is not None:
+                progress_bar.close()
+
+        return results_parallel
+
+    def _run_single_seed(
+        self,
+        *,
+        seed: int,
+        plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+        k_0: int,
+        initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+        my_setting: bool,
+    ) -> list[IterationEstimate]:
+        observation = self._simulate_observation(seed)
+        stage0_prev = tuple(jnp.asarray(theta) for theta in initial_theta_stage0)
+        iterations: list[IterationEstimate] = []
+        for k in range(1, k_0 + 1):
+            if k not in plan:
+                msg = f"Plan does not contain estimator triple for k={k}."
+                raise KeyError(msg)
+            theta1_k0 = self._estimate_component(
+                estimator_kind=plan[k][0],
+                component=1,
+                k_arg=k,
+                observation=observation,
+                theta_bar=stage0_prev,
+                initial_guess=stage0_prev[0],
+                use_prime_objective=True,
+                my_setting=my_setting,
+            )
+            theta2_k0 = self._estimate_component(
+                estimator_kind=plan[k][1],
+                component=2,
+                k_arg=k,
+                observation=observation,
+                theta_bar=(theta1_k0, stage0_prev[1], stage0_prev[2]),
+                initial_guess=stage0_prev[1],
+            )
+            theta3_k0 = self._estimate_component(
+                estimator_kind=plan[k][2],
+                component=3,
+                k_arg=k,
+                observation=observation,
+                theta_bar=(theta1_k0, theta2_k0, stage0_prev[2]),
+                initial_guess=stage0_prev[2],
+            )
+            stage0_prev = tuple(jnp.asarray(v) for v in (theta1_k0, theta2_k0, theta3_k0))
+            theta_stage0_snapshot = stage0_prev
+
+            theta1_final = self._estimate_component(
+                estimator_kind=plan[k + 1][0],
+                component=1,
+                k_arg=k + 1,
+                observation=observation,
+                theta_bar=stage0_prev,
+                initial_guess=stage0_prev[0],
+                use_prime_objective=False,
+                my_setting=my_setting,
+            )
+            theta2_final = stage0_prev[1]
+            if k_0 == 1:
+                theta3_final = self._estimate_component(
+                    estimator_kind=plan[k + 1][2],
                     component=3,
-                    k_arg=k,
+                    k_arg=1,
                     observation=observation,
-                    theta_bar=(theta1_k0, theta2_k0, stage0_prev[2]),
+                    theta_bar=stage0_prev,
                     initial_guess=stage0_prev[2],
                 )
-                stage0_prev = tuple(jnp.asarray(v) for v in (theta1_k0, theta2_k0, theta3_k0))
-                theta_stage0_snapshot = stage0_prev
+            else:
+                theta3_final = stage0_prev[2]
 
-                theta1_final = self._estimate_component(
-                    estimator_kind=plan[k + 1][0],
-                    component=1,
-                    k_arg=k + 1,
-                    observation=observation,
-                    theta_bar=stage0_prev,
-                    initial_guess=stage0_prev[0],
-                    use_prime_objective=False,
-                    my_setting=my_setting,
+            iterations.append(
+                IterationEstimate(
+                    k=k,
+                    theta_stage0=theta_stage0_snapshot,
+                    theta_final=(
+                        jnp.asarray(theta1_final),
+                        jnp.asarray(theta2_final),
+                        jnp.asarray(theta3_final),
+                    ),
                 )
-                theta2_final = stage0_prev[1]
-                if k_0 == 1:
-                    theta3_final = self._estimate_component(
-                        estimator_kind=plan[k + 1][2],
-                        component=3,
-                        k_arg=1,
-                        observation=observation,
-                        theta_bar=stage0_prev,
-                        initial_guess=stage0_prev[2],
-                    )
-                else:
-                    theta3_final = stage0_prev[2]
+            )
+        return iterations
 
-                iterations.append(
-                    IterationEstimate(
-                        k=k,
-                        theta_stage0=theta_stage0_snapshot,
-                        theta_final=(
-                            jnp.asarray(theta1_final),
-                            jnp.asarray(theta2_final),
-                            jnp.asarray(theta3_final),
-                        ),
-                    )
-                )
-            results[seed] = iterations
-        return results
+    def run_single_seed(
+        self,
+        *,
+        seed: int,
+        plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+        k_0: int,
+        initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
+        my_setting: bool,
+    ) -> list[IterationEstimate]:
+        """Public wrapper around :meth:`_run_single_seed` for multiprocessing."""
+        return self._run_single_seed(
+            seed=seed,
+            plan=plan,
+            k_0=k_0,
+            initial_theta_stage0=initial_theta_stage0,
+            my_setting=my_setting,
+        )
 
     def _simulate_observation(self, seed: int) -> Observation:
         cfg = self._simulation
@@ -576,6 +812,7 @@ def save_summary_to_csv(
     *,
     float_formatter: _typing.Callable[[float], str] | None = None,
     true_theta: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None,
+    metadata: cabc.Mapping[str, float | str] | None = None,
 ) -> Path:
     """Save summary statistics to ``file_path`` in CSV format.
 
@@ -588,6 +825,10 @@ def save_summary_to_csv(
         true_theta: When provided, appends rows containing the true parameter
             values so that downstream tooling can reconstruct them from the CSV
             alone.
+        metadata: Optional mapping of scalar metadata (for example ``h`` or
+            ``nh``) to record alongside the summary values. Entries are stored
+            under a dedicated phase marker and can be recovered when reading
+            from the CSV.
 
     Returns:
         The resolved output :class:`~pathlib.Path`.
@@ -599,6 +840,8 @@ def save_summary_to_csv(
     rows = _summary_rows(summary, float_formatter=float_formatter)
     if true_theta is not None:
         rows.extend(_truth_rows(true_theta, float_formatter=float_formatter))
+    if metadata:
+        rows.extend(_metadata_rows(metadata, float_formatter=float_formatter))
     fieldnames = ["phase", "k", "component", "mean", "std"]
 
     with path.open("w", newline="") as csvfile:
@@ -694,6 +937,33 @@ def _truth_rows(
     return rows
 
 
+def _metadata_rows(
+    metadata: cabc.Mapping[str, float | str],
+    *,
+    float_formatter: _typing.Callable[[float], str] | None = None,
+) -> list[dict[str, object]]:
+    def _format(value: float | str) -> str:
+        if isinstance(value, str):
+            return value
+        numeric = float(value)
+        if float_formatter is not None:
+            return float_formatter(numeric)
+        return f"{numeric:.6f}"
+
+    rows: list[dict[str, object]] = []
+    for key, value in metadata.items():
+        rows.append(
+            {
+                "phase": META_PHASE,
+                "k": "",
+                "component": str(key),
+                "mean": _format(value),
+                "std": "",
+            }
+        )
+    return rows
+
+
 def _loop_results_rows(
     loop_results: cabc.Mapping[int, cabc.Sequence[IterationEstimate]],
     *,
@@ -728,6 +998,9 @@ def _loop_results_rows(
     return rows
 
 
+FLOAT_PATH_EPS = 1e-9
+
+
 def _format_array(
     array: jnp.ndarray,
     float_formatter: _typing.Callable[[float], str] | None,
@@ -741,6 +1014,109 @@ def _format_array(
 
     formatted = (_format_value(float(val)) for val in flattened.tolist())
     return " ".join(formatted)
+
+
+def _format_numeric_for_path(value: float | str) -> str:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return _sanitize_folder_component(str(value))
+    if abs(numeric - round(numeric)) < FLOAT_PATH_EPS:
+        return str(round(numeric))
+    return f"{numeric:.6f}".rstrip("0").rstrip(".")
+
+
+def _sanitize_folder_component(component: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", component.strip())
+    cleaned = re.sub(r"_+", "_", cleaned).strip("._")
+    return cleaned or "output"
+
+
+def build_output_directory(
+    base_path: str | Path,
+    model: object | str,
+    *,
+    h: float,
+    nh: float,
+) -> Path:
+    if isinstance(model, str):
+        model_name = model
+    else:
+        model_name = getattr(model, "name", None) or model.__class__.__name__
+    folder_name = (
+        f"{_sanitize_folder_component(str(model_name))}_"
+        f"nh{_format_numeric_for_path(nh)}_h{_format_numeric_for_path(h)}"
+    )
+    output_dir = Path(base_path) / folder_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
+
+
+def _contains_bayesian_estimators(
+    plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
+) -> bool:
+    return any("B" in estimators for estimators in plan.values())
+
+
+def save_model_structure(
+    model: object,
+    destination_dir: str | Path,
+    *,
+    filename: str = "model_structure.txt",
+    encoding: str = "utf-8",
+) -> Path:
+    """Persist the symbolic form of ``A``, ``B``, and ``H`` for a model.
+
+    Args:
+        model: Model instance exposing symbolic artifacts ``A``, ``B``, and ``H``.
+        destination_dir: Directory where the structure description will be saved.
+        filename: Target file name, defaults to ``"model_structure.txt"``.
+        encoding: Text encoding used when writing the file.
+
+    Returns:
+        The resolved output :class:`~pathlib.Path`.
+
+    """
+    dir_path = Path(destination_dir)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    target_path = dir_path / filename
+
+    model_name = getattr(model, "name", None) or model.__class__.__name__
+
+    sections = {
+        "A": getattr(model, "A", None),
+        "B": getattr(model, "B", None),
+        "H": getattr(model, "H", None),
+    }
+
+    lines = ["# Model structure", "", f"Model name: {model_name}", ""]
+
+    for label, artifact in sections.items():
+        if artifact is None:
+            continue
+
+        expr = getattr(artifact, "expr", artifact)
+        lines.append(f"## {label}(x, y, θ)")
+        try:
+            pretty_expr = sp.pretty(expr)
+        except (AttributeError, TypeError, ValueError):  # pragma: no cover - fallback
+            pretty_expr = None
+
+        if pretty_expr:
+            lines.append("```text")
+            lines.append(pretty_expr)
+            lines.append("```")
+            lines.append("")
+
+    lines.append("SymPy expression:")
+    lines.append("```python")
+    lines.append(str(expr))
+    lines.append("```")
+    lines.append("")
+
+    content = "\n".join(lines).rstrip() + "\n"
+    target_path.write_text(content, encoding=encoding)
+    return target_path
 
 
 def _parse_numeric_sequence(value: str) -> list[float]:
@@ -780,6 +1156,19 @@ def _store_component_stats(
     bucket["std"][component] = std_values or None
 
 
+def _handle_special_summary_row(
+    *,
+    phase: str,
+    component: str,
+    mean_values: list[float],
+    truth_parts: dict[str, list[float]],
+) -> bool:
+    if phase == TRUTH_PHASE:
+        truth_parts[component] = mean_values
+        return True
+    return phase == META_PHASE
+
+
 def _load_summary_csv(
     file_path: str | Path,
 ) -> tuple[dict[str, dict[int, EstimateStatistics]], tuple[jnp.ndarray, ...] | None]:
@@ -797,8 +1186,12 @@ def _load_summary_csv(
             mean_values = _parse_numeric_sequence(row.get("mean", ""))
             std_values = _parse_numeric_sequence(row.get("std", ""))
 
-            if phase == TRUTH_PHASE:
-                truth_parts[component] = mean_values
+            if _handle_special_summary_row(
+                phase=phase,
+                component=component,
+                mean_values=mean_values,
+                truth_parts=truth_parts,
+            ):
                 continue
 
             k = _parse_iteration_index(row["k"])

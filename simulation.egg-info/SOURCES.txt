@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 degenerate_sim/__init__.py
 degenerate_sim/estimation/__init__.py
+degenerate_sim/estimation/loop_estimation_algorithm.py
 degenerate_sim/estimation/parameter_estimator.py
 degenerate_sim/evaluation/__init__.py
 degenerate_sim/evaluation/likelihood_evaluator_jax.py
