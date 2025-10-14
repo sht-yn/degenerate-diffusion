@@ -142,6 +142,7 @@ Requires-Dist: rfc3339-validator>=0.1.4
 Requires-Dist: rfc3986-validator>=0.1.1
 Requires-Dist: rich>=14.1.0
 Requires-Dist: rpds-py>=0.27.1
+Requires-Dist: rpy2>=3.6.4
 Requires-Dist: ruff>=0.13.1
 Requires-Dist: scikit-learn>=1.7.2
 Requires-Dist: scipy>=1.16.2

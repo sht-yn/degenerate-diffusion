@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
 import typing as _typing
 from collections import defaultdict
@@ -44,6 +45,27 @@ THETA_COMPONENT_3 = 3
 
 
 _PROCESS_POOL_STATE: dict[str, object] = {}
+
+
+def _ensure_tqdm_notebook_fallback() -> None:
+    """Force tqdm to fall back to text mode when notebook widgets misbehave."""
+    if "TQDM_NOTEBOOK_FALLBACK" not in os.environ:
+        os.environ["TQDM_NOTEBOOK_FALLBACK"] = "1"
+
+
+def _build_progress_bar(
+    *,
+    iterable: cabc.Iterable[int] | None = None,
+    total: int | None = None,
+    desc: str,
+    unit: str,
+    position: int | None,
+    leave: bool,
+) -> tqdm:
+    _ensure_tqdm_notebook_fallback()
+    if iterable is not None:
+        return tqdm(iterable, desc=desc, unit=unit, position=position, leave=leave)
+    return tqdm(total=total, desc=desc, unit=unit, position=position, leave=leave)
 
 
 @dataclass(frozen=True)
@@ -241,8 +263,8 @@ class LoopEstimationAlgorithm:
         iterator: cabc.Iterable[int]
         progress_bar: tqdm | None = None
         if show_progress:
-            progress_bar = tqdm(
-                seeds_sequence,
+            progress_bar = _build_progress_bar(
+                iterable=seeds_sequence,
                 desc=progress_desc or "Estimating seeds",
                 unit="seed",
                 position=progress_position,
@@ -281,7 +303,7 @@ class LoopEstimationAlgorithm:
     ) -> dict[int, list[IterationEstimate]]:
         progress_bar: tqdm | None = None
         if show_progress:
-            progress_bar = tqdm(
+            progress_bar = _build_progress_bar(
                 total=len(seeds_sequence),
                 desc=progress_desc or "Estimating seeds",
                 unit="seed",
@@ -329,7 +351,7 @@ class LoopEstimationAlgorithm:
     ) -> dict[int, list[IterationEstimate]]:
         progress_bar: tqdm | None = None
         if show_progress:
-            progress_bar = tqdm(
+            progress_bar = _build_progress_bar(
                 total=len(seeds_sequence),
                 desc=progress_desc or "Estimating seeds",
                 unit="seed",
