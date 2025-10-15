@@ -375,8 +375,6 @@ class QuasiLikelihoodEvaluator:
         theta_3_bar: jnp.ndarray,
         h: float,
         k_arg: int,
-        *,
-        i: int | None = None,
     ) -> jnp.ndarray:
         r"""疑似尤度で利用する \(\Delta y\) をスケール済みで算出する。"""
         if h <= 0:
