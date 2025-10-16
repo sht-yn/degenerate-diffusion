@@ -31,6 +31,14 @@
   もしくは `JAX_ENABLE_X64=1` を環境変数として設定してください。
 
 ## セットアップ手順
+### GitHub から取得
+```bash
+git clone https://github.com/sht-yn/degenerate-diffusion.git
+cd degenerate-diffusion
+uv sync
+source .venv/bin/activate
+```
+
 ### uv を使う場合
 ```bash
 uv init .               # 初回のみ（pyproject が未整備なら）

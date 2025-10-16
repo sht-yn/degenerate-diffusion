@@ -1,13 +1,13 @@
 # uv と仮想環境のセットアップ手順メモ
 
 ## 背景
-- プロジェクトは `/Users/yanoshouta/dev/simulation`（Python 3.11）。
-- 以前 `/Users/yanoshouta/simulation/.venv` に旧環境が存在し、そこを使い続けていた。
+- プロジェクトは `/Users/yanoshouta/dev/degenerate-diffusion`（Python 3.11）。
+- 以前 `/Users/yanoshouta/degenerate-diffusion/.venv` に旧環境が存在し、そこを使い続けていた。
 - `uv` は "カレントプロジェクト直下の .venv" を前提にするため、環境がずれていると警告が出る。
 
 ## 1. プロジェクト直下に `.venv` を作成
 ```bash
-cd /Users/yanoshouta/dev/simulation
+cd /Users/yanoshouta/dev/degenerate-diffusion
 uv sync            # .venv が作成され、依存関係がインストールされる
 source .venv/bin/activate
 ```
@@ -15,31 +15,24 @@ source .venv/bin/activate
 ※ Windows 用の `activate.bat` を macOS で実行する必要はない。`source .venv/bin/activate` で十分。
 
 ## 2. プロジェクトを "import 可能" にする
-### なぜ `uv add .` や `uv pip install -e .` ではダメなのか
-- `uv add .` は "プロジェクト自身 (`simulation`) を依存ライブラリとして追加" しようとするため、自己依存で弾かれる。
-- `uv pip install -e .` は editable install を試みるが、ビルドで PyPI から `setuptools` / `wheel` を取得しようとし、ネットワーク制限で失敗。
+### なぜ `uv add .` や `uv pip install -e .` を使わないのか
+- `uv add .` は "プロジェクト自身 (`degenerate-diffusion`) を依存ライブラリとして追加" しようとするため、自己依存で弾かれる。
+- `uv pip install -e .` は editable install を試みるが、ネットワーク制限環境では失敗することがある。
 
-### 解決策（`.pth` ファイル）
-`site-packages` にパスを追加する `.pth` ファイルを置く。一度作成すればその `.venv` が生きている限り有効。
-```bash
-# プロジェクト直下で実行
-echo "/Users/yanoshouta/dev/simulation" > .venv/lib/python3.11/site-packages/simulation.pth
+### 現状の解決策
+`src` レイアウトと `pyproject.toml` の設定により、`uv sync` でローカルパッケージが自動的にインストールされる。このため追加の `.pth` ファイルは不要。
+
+参考として `pyproject.toml` の指定は以下の通り。
+```toml
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["degenerate_diffusion*"]
+exclude = ["old*", "__pycache__"]
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
 ```
-
-これで `import degenerate_diffusion` がどこからでも通るようになる（Ruff の「絶対インポート推奨」にも対応）。
-
-### 補足
-- `.pth` は仮想環境を再作成したり削除したときに消えるので、`uv sync` で `.venv` を作り直した場合は再度作成する。
-- `pyproject.toml` では以下を指定し、`degenerate_diffusion` のみをパッケージ対象にするよう調整済み。
-  ```toml
-  [tool.setuptools.packages.find]
-  include = ["degenerate_diffusion*"]
-  exclude = ["old*", "__pycache__"]
-  
-  [build-system]
-  requires = ["setuptools>=65", "wheel"]
-  build-backend = "setuptools.build_meta"
-  ```
 
 ## 3. 依存関係の更新（参考）
 - 依存を追加したい場合は `uv add <package>`（`<package>` は PyPI の名前）。
@@ -48,15 +41,12 @@ echo "/Users/yanoshouta/dev/simulation" > .venv/lib/python3.11/site-packages/sim
 
 ## 4. 結局どう使うか
 ```bash
-cd /Users/yanoshouta/dev/simulation
+cd /Users/yanoshouta/dev/degenerate-diffusion
 uv sync                         # まだなら仮想環境を作る
 source .venv/bin/activate
 # ↑ 以降はこのシェルで作業
 
-# 初回だけ .pth を作る
-echo "/Users/yanoshouta/dev/simulation" > .venv/lib/python3.11/site-packages/simulation.pth
-
-# 以降、ノートブックやスクリプトでは
+# 動作確認
 python -c "import degenerate_diffusion; print(degenerate_diffusion.__file__)"
 ```
 
