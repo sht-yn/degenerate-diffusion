@@ -190,6 +190,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["degenerate_sim*"]
 exclude = ["old*", "__pycache__"]
 
