@@ -85,3 +85,13 @@ docstring-code-format = true
 [lint.per-file-ignores]
 # Ignore all directories named `tests`.
 "tests/**" = ["INP001", "S101"]
+"**/*.ipynb" = [
+    "E402", # import の位置
+    "F401",
+    "F403",
+    "F405", # 未使用/ワイルドカード import
+    "D",    # Docstring 全般
+    "S",    # Bandit 系（実験ノートで警告がち）
+    "T201", # print
+    "N806", # 大文字変数など命名
+]
