@@ -39,40 +39,6 @@ exclude = ["old*", "__pycache__"]
 [tool.setuptools.package-data]
 "degenerate_diffusion" = ["py.typed"]
 
-[tool.ruff]
-force-exclude = true
-line-length = 100
-target-version = "py311"
-exclude = [
-    ".git",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-    ".venv",
-    ".vscode",
-    "venv",
-    "build",
-    "dist",
-    "site-packages",
-    ".ipynb_checkpoints",
-    "old",
-    "old/**",
-    "*.ipynb",
-]
-
-[tool.ruff.lint]
-extend-select = ["E", "F", "I", "UP", "B", "SIM", "NPY", "RUF"]
-extend-ignore = ["D", "PLR0913", "T201"]
-fixable = ["ALL"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["INP001", "S101"]
-
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true
@@ -101,3 +67,39 @@ dev = [
     "pytest-cov~=5.0",
     "ruff~=0.5",
 ]
+
+#ruff_setting
+
+# [tool.ruff]
+# force-exclude = true
+# line-length = 100
+# target-version = "py311"
+# exclude = [
+#     ".git",
+#     ".mypy_cache",
+#     ".ruff_cache",
+#     ".pytest_cache",
+#     ".venv",
+#     ".vscode",
+#     "venv",
+#     "build",
+#     "dist",
+#     "site-packages",
+#     ".ipynb_checkpoints",
+#     "old",
+#     "old/**",
+#     "*.ipynb",
+# ]
+
+# [tool.ruff.lint]
+# extend-select = ["E", "F", "I", "UP", "B", "SIM", "NPY", "RUF"]
+# extend-ignore = ["D", "PLR0913", "T201"]
+# fixable = ["ALL"]
+
+# [tool.ruff.format]
+# quote-style = "double"
+# indent-style = "space"
+# docstring-code-format = true
+
+# [tool.ruff.lint.per-file-ignores]
+# "tests/**" = ["INP001", "S101"]
