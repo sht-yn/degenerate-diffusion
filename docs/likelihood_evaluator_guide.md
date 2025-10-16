@@ -1,6 +1,6 @@
 # LikelihoodEvaluator 利用ガイド
 
-このドキュメントでは、`degenerate_sim` パッケージに含まれる `LikelihoodEvaluator` と関連コンポーネントの構造、利用手順、注意点をまとめます。2024 年リファクタ後の新しい設計に基づいています。
+このドキュメントでは、`degenerate_diffusion` パッケージに含まれる `LikelihoodEvaluator` と関連コンポーネントの構造、利用手順、注意点をまとめます。2024 年リファクタ後の新しい設計に基づいています。
 
 ## 全体構成
 
@@ -42,7 +42,7 @@
 
 3. **初期化エラーの確認**
    ```python
-   from degenerate_sim.evaluation.likelihood_evaluator_jax import SymbolicPreparationError
+   from degenerate_diffusion.evaluation.likelihood_evaluator_jax import SymbolicPreparationError
 
    try:
        likelihood = LikelihoodEvaluator(model)
@@ -60,7 +60,7 @@
 
 ## SymPy による記号式の簡約と高速化
 
-V1 系の疑似尤度は高次の `S_l` テンソルを多数評価するため、lambdify された関数が大きくなりがちです。2024.06 時点の実装では、`degenerate_sim/evaluation/likelihood_evaluator_jax.py:424-440` で SymPy の簡約機能を使い、JAX 側の実行コストを抑えています。仕組みは次の通りです。
+V1 系の疑似尤度は高次の `S_l` テンソルを多数評価するため、lambdify された関数が大きくなりがちです。2024.06 時点の実装では、`degenerate_diffusion/evaluation/likelihood_evaluator_jax.py:424-440` で SymPy の簡約機能を使い、JAX 側の実行コストを抑えています。仕組みは次の通りです。
 
 - **`sympy.simplify` の適用**
   - `Array(...).applyfunc(sp.simplify)` とすることで、テンソルの各要素ごとに簡約を試みます。
@@ -146,8 +146,8 @@ lk3 = likelihood.make_quasi_likelihood_l3_evaluator(
 
 ## 参考情報
 
-- 推定ルーチン: `degenerate_sim/estimation/parameter_estimator.py`
-- シミュレーション例: `degenerate_sim/processes/degenerate_diffusion_process_jax.py`
+- 推定ルーチン: `degenerate_diffusion/estimation/parameter_estimator.py`
+- シミュレーション例: `degenerate_diffusion/processes/degenerate_diffusion_process_jax.py`
 - Notebook サンプル: `FNmodel.ipynb`
 
 以上を参考に、必要に応じて Notebook やスクリプトに組み込んでください。

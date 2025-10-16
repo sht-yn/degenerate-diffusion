@@ -25,11 +25,11 @@ from sympy import (
 )
 from sympy.matrices.common import NonInvertibleMatrixError
 
-from degenerate_sim.utils.einsum_sympy import einsum_sympy
-from degenerate_sim.utils.symbolic_artifact import SymbolicArtifact
+from degenerate_diffusion.utils.einsum_sympy import einsum_sympy
+from degenerate_diffusion.utils.symbolic_artifact import SymbolicArtifact
 
 if TYPE_CHECKING:
-    from degenerate_sim.processes.degenerate_diffusion_process_jax import (
+    from degenerate_diffusion.processes.degenerate_diffusion_process_jax import (
         DegenerateDiffusionProcess,
     )
 

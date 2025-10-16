@@ -26,14 +26,14 @@ source .venv/bin/activate
 echo "/Users/yanoshouta/dev/simulation" > .venv/lib/python3.11/site-packages/simulation.pth
 ```
 
-これで `import degenerate_sim` がどこからでも通るようになる（Ruff の「絶対インポート推奨」にも対応）。
+これで `import degenerate_diffusion` がどこからでも通るようになる（Ruff の「絶対インポート推奨」にも対応）。
 
 ### 補足
 - `.pth` は仮想環境を再作成したり削除したときに消えるので、`uv sync` で `.venv` を作り直した場合は再度作成する。
-- `pyproject.toml` では以下を指定し、`degenerate_sim` のみをパッケージ対象にするよう調整済み。
+- `pyproject.toml` では以下を指定し、`degenerate_diffusion` のみをパッケージ対象にするよう調整済み。
   ```toml
   [tool.setuptools.packages.find]
-  include = ["degenerate_sim*"]
+  include = ["degenerate_diffusion*"]
   exclude = ["old*", "__pycache__"]
   
   [build-system]
@@ -57,7 +57,7 @@ source .venv/bin/activate
 echo "/Users/yanoshouta/dev/simulation" > .venv/lib/python3.11/site-packages/simulation.pth
 
 # 以降、ノートブックやスクリプトでは
-python -c "import degenerate_sim; print(degenerate_sim.__file__)"
+python -c "import degenerate_diffusion; print(degenerate_diffusion.__file__)"
 ```
 
 これで JAX コードを絶対インポートで利用でき、Ruff の警告（相対インポート）も回避できる。ネットワーク制限下でも編集内容が即時反映され、開発体験がシンプルになる。

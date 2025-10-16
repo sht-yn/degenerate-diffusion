@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import sympy as sp
 from tqdm.auto import tqdm
 
-from degenerate_sim.estimation.parameter_estimator import (
+from degenerate_diffusion.estimation.parameter_estimator import (
     Array1D,
     Bounds,
     bayes_estimate,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from degenerate_sim.evaluation.likelihood_evaluator_jax import LikelihoodEvaluator
+    from degenerate_diffusion.evaluation.likelihood_evaluator_jax import LikelihoodEvaluator
 else:  # pragma: no cover - runtime fallback for type-only imports
     cabc = _typing
 

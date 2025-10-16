@@ -1,6 +1,6 @@
 # パラメータ推定ユーティリティの使い方
 
-`degenerate_sim/estimation/parameter_estimator.py` では、勾配ベースの推定器を複数提供しています。ここでは `m_estimate` と `m_estimate_jax` の概要と利用方法をまとめます。
+`degenerate_diffusion/estimation/parameter_estimator.py` では、勾配ベースの推定器を複数提供しています。ここでは `m_estimate` と `m_estimate_jax` の概要と利用方法をまとめます。
 
 ## 共通の前提
 
@@ -9,7 +9,7 @@
 - `initial_guess` は推定を開始する初期値ベクトルです。境界外の成分は自動的にクリップされます。
 
 ```python
-from degenerate_sim.estimation.parameter_estimator import (
+from degenerate_diffusion.estimation.parameter_estimator import (
     m_estimate,
     m_estimate_jax,
 )
@@ -66,7 +66,7 @@ theta_hat = m_estimate_jax(
 確率的なパラメータ推定を行うラッパで、NumPyro の NUTS + MCMC を内部で実行します。使用例は次の通りです。
 
 ```python
-from degenerate_sim.estimation.parameter_estimator import bayes_estimate
+from degenerate_diffusion.estimation.parameter_estimator import bayes_estimate
 
 theta_posterior_mean = bayes_estimate(
     objective_function=my_log_likelihood,  # theta -> log p(data | theta)

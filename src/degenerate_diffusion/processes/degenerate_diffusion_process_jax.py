@@ -12,7 +12,7 @@ from jax import lax  # For jax.lax.scan
 from jax import numpy as jnp
 from sympy import lambdify, symbols
 
-from degenerate_sim.utils.symbolic_artifact import SymbolicArtifact
+from degenerate_diffusion.utils.symbolic_artifact import SymbolicArtifact
 
 
 # %%

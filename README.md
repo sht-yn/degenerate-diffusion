@@ -1,6 +1,6 @@
 # 退化拡散過程シミュレーションツールキット
 
-このリポジトリは退化拡散過程（degenerate diffusion process）に対する擬似尤度推定の実験環境です。SymPy で記述した記号モデルを JAX へ変換し、高速なシミュレーションと NumPyro ベースの推定を行います。研究用ノートブックを主眼としていますが、`degenerate_sim/` 配下のモジュールは軽量なツールキットとしても利用できます。
+このリポジトリは退化拡散過程（degenerate diffusion process）に対する擬似尤度推定の実験環境です。SymPy で記述した記号モデルを JAX へ変換し、高速なシミュレーションと NumPyro ベースの推定を行います。研究用ノートブックを主眼としていますが、`degenerate_diffusion/` 配下のモジュールは軽量なツールキットとしても利用できます。
 
 ## 特徴
 - SymPy で定義したドリフト・拡散・観測方程式を `lambdify` で JAX 関数へ自動変換。
@@ -10,7 +10,7 @@
 - SymPy 配列向けユーティリティ（`ImmutableDenseNDimArray` 用 `einsum` など）。
 
 ## ディレクトリ構成
-- `degenerate_sim/`
+- `degenerate_diffusion/`
   - `processes/degenerate_diffusion_process_jax.py`: 記号モデルと JAX シミュレータ。
   - `evaluation/likelihood_evaluator_jax.py`: 擬似尤度評価器を生成するファクトリ関数。
   - `estimation/parameter_estimator.py`: `m_estimate`、`one_step_estimate`、`bayes_estimate` を提供。
@@ -50,8 +50,8 @@ pip install jax jaxlib numpy sympy numpyro matplotlib
 ```python
 import sympy as sp
 import jax.numpy as jnp
-from degenerate_sim import DegenerateDiffusionProcess, LikelihoodEvaluator
-from degenerate_sim.estimation import m_estimate, bayes_estimate
+from degenerate_diffusion import DegenerateDiffusionProcess, LikelihoodEvaluator
+from degenerate_diffusion.estimation import m_estimate, bayes_estimate
 
 # 1. SymPy でモデルを定義
 x0, y0 = sp.symbols("x0 y0")
@@ -112,7 +112,7 @@ bayes_result = bayes_estimate(
   - NumPyro の `MCMC(NUTS)` を呼び出し、事後サンプルの平均を返却。
 
 ## ユーティリティとノート
-- `degenerate_sim.utils.einsum_sympy`: SymPy 配列向け `einsum` 実装。インポート時に自己テストが走ります。
+- `degenerate_diffusion.utils.einsum_sympy`: SymPy 配列向け `einsum` 実装。インポート時に自己テストが走ります。
 - `FNmodel.ipynb`: Fowler–Nordheim 型モデルを題材にした例示ノート。
 - `jax_study.ipynb`: JAX の挙動を検証したスケッチ。
 - `old/`: 過去のモジュール構成。古いノートを開く用途で残存。
@@ -120,7 +120,7 @@ bayes_result = bayes_estimate(
 ## 既知の課題 / TODO
 - `einsum_sympy.py` がインポート時にデモ計算を実行するため、副作用をテストへ移したい。
 - 擬似尤度クラスの警告出力が `print` に依存している。ロガーや例外クラスへの置換が課題。
-- 一部ノートブックは `old/` 配下の互換モジュールを参照している。`degenerate_sim` への移行を進める。
+- 一部ノートブックは `old/` 配下の互換モジュールを参照している。`degenerate_diffusion` への移行を進める。
 - 高次擬似尤度（`k > 3`）は数値的に不安定なため、64bit 精度やパラメータスケーリングの検討が必要。
 
 改善提案や機能追加があれば Issue / Pull Request で共有してください。
