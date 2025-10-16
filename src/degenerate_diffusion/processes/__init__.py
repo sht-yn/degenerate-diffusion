@@ -1,4 +1,4 @@
-from .degenerate_diffusion_process_jax import DegenerateDiffusionProcess
+from .degenerate_diffusion_process import DegenerateDiffusionProcess
 
 __all__ = [
     "DegenerateDiffusionProcess",

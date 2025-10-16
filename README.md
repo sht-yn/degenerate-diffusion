@@ -11,8 +11,8 @@
 
 ## ディレクトリ構成
 - `degenerate_diffusion/`
-  - `processes/degenerate_diffusion_process_jax.py`: 記号モデルと JAX シミュレータ。
-  - `evaluation/likelihood_evaluator_jax.py`: 擬似尤度評価器を生成するファクトリ関数。
+  - `processes/degenerate_diffusion_process.py`: 記号モデルと JAX シミュレータ。
+  - `evaluation/likelihood_evaluator.py`: 擬似尤度評価器を生成するファクトリ関数。
   - `estimation/parameter_estimator.py`: `m_estimate`、`one_step_estimate`、`bayes_estimate` を提供。
   - `utils/einsum_sympy.py`: SymPy 向け `einsum` 実装（インポート時に簡易セルフテスト実行）。
   - `__init__.py`: 主要クラス／関数の再エクスポート。

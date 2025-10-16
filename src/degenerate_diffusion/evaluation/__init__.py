@@ -1,6 +1,6 @@
 """Likelihood evaluators for degenerate diffusion models."""
 
-from .likelihood_evaluator_jax import LikelihoodEvaluator
+from .likelihood_evaluator import LikelihoodEvaluator
 
 __all__ = [
     "LikelihoodEvaluator",

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-    from degenerate_diffusion.evaluation.likelihood_evaluator_jax import LikelihoodEvaluator
+    from degenerate_diffusion.evaluation.likelihood_evaluator import LikelihoodEvaluator
 else:  # pragma: no cover - runtime fallback for type-only imports
     cabc = _typing
 
