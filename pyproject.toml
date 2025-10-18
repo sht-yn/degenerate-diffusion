@@ -50,6 +50,16 @@ disallow_incomplete_defs = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+# テストは緩く：未注釈の関数OK、Anyの流入も許容
+disallow_untyped_defs = false
+disallow_any_generics = false
+check_untyped_defs = false
+# でも雑な無視は残さない
+warn_unused_ignores = true
+
 [build-system]
 requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
