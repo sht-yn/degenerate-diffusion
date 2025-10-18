@@ -108,8 +108,6 @@ def _process_pool_run_single_seed(
     plan: dict[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
     k_0: int,
     initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
-    *,
-    my_setting: bool,
 ) -> list[IterationEstimate]:
     algorithm: LoopEstimationAlgorithm = _PROCESS_POOL_STATE["algorithm"]
     return algorithm.run_single_seed(
@@ -117,7 +115,6 @@ def _process_pool_run_single_seed(
         plan=plan,
         k_0=k_0,
         initial_theta_stage0=initial_theta_stage0,
-        my_setting=my_setting,
     )
 
 
@@ -167,7 +164,6 @@ class LoopEstimationAlgorithm:
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
         *,
-        my_setting: bool = True,
         show_progress: bool = False,
         progress_desc: str | None = None,
         progress_position: int | None = None,
@@ -216,7 +212,6 @@ class LoopEstimationAlgorithm:
                 plan,
                 k_0,
                 initial_theta_stage0,
-                my_setting=my_setting,
                 show_progress=show_progress,
                 progress_desc=progress_desc,
                 progress_position=progress_position,
@@ -230,7 +225,6 @@ class LoopEstimationAlgorithm:
                 plan,
                 k_0,
                 initial_theta_stage0,
-                my_setting=my_setting,
                 show_progress=show_progress,
                 progress_desc=progress_desc,
                 progress_position=progress_position,
@@ -241,7 +235,6 @@ class LoopEstimationAlgorithm:
             plan,
             k_0,
             initial_theta_stage0,
-            my_setting=my_setting,
             show_progress=show_progress,
             progress_desc=progress_desc,
             progress_position=progress_position,
@@ -254,7 +247,6 @@ class LoopEstimationAlgorithm:
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
         *,
-        my_setting: bool,
         show_progress: bool,
         progress_desc: str | None,
         progress_position: int | None,
@@ -281,7 +273,6 @@ class LoopEstimationAlgorithm:
                     plan=plan,
                     k_0=k_0,
                     initial_theta_stage0=initial_theta_stage0,
-                    my_setting=my_setting,
                 )
         finally:
             if progress_bar is not None:
@@ -295,7 +286,6 @@ class LoopEstimationAlgorithm:
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
         *,
-        my_setting: bool,
         show_progress: bool,
         progress_desc: str | None,
         progress_position: int | None,
@@ -321,7 +311,6 @@ class LoopEstimationAlgorithm:
                         plan=plan,
                         k_0=k_0,
                         initial_theta_stage0=initial_theta_stage0,
-                        my_setting=my_setting,
                     ): seed
                     for seed in seeds_sequence
                 }
@@ -343,7 +332,6 @@ class LoopEstimationAlgorithm:
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
         *,
-        my_setting: bool,
         show_progress: bool,
         progress_desc: str | None,
         progress_position: int | None,
@@ -377,7 +365,6 @@ class LoopEstimationAlgorithm:
                         plan_serializable,
                         k_0,
                         initial_theta_stage0,
-                        my_setting=my_setting,
                     ): seed
                     for seed in seeds_sequence
                 }
@@ -399,7 +386,6 @@ class LoopEstimationAlgorithm:
         plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
-        my_setting: bool,
     ) -> list[IterationEstimate]:
         observation = self._simulate_observation(seed)
         stage0_prev = tuple(jnp.asarray(theta) for theta in initial_theta_stage0)
@@ -416,7 +402,6 @@ class LoopEstimationAlgorithm:
                 theta_bar=stage0_prev,
                 initial_guess=stage0_prev[0],
                 use_prime_objective=True,
-                my_setting=my_setting,
             )
             theta2_k0 = self._estimate_component(
                 estimator_kind=plan[k][1],
@@ -458,7 +443,6 @@ class LoopEstimationAlgorithm:
                 theta_bar=stage0_prev,
                 initial_guess=stage0_prev[0],
                 use_prime_objective=False,
-                my_setting=my_setting,
             )
             theta2_final = stage0_prev[1]
 
@@ -482,7 +466,6 @@ class LoopEstimationAlgorithm:
         plan: cabc.Mapping[int, tuple[EstimatorKind, EstimatorKind, EstimatorKind]],
         k_0: int,
         initial_theta_stage0: tuple[Array1D, Array1D, Array1D],
-        my_setting: bool,
     ) -> list[IterationEstimate]:
         """Public wrapper around :meth:`_run_single_seed` for multiprocessing."""
         return self._run_single_seed(
@@ -490,7 +473,6 @@ class LoopEstimationAlgorithm:
             plan=plan,
             k_0=k_0,
             initial_theta_stage0=initial_theta_stage0,
-            my_setting=my_setting,
         )
 
     def _simulate_observation(self, seed: int) -> Observation:
@@ -521,7 +503,6 @@ class LoopEstimationAlgorithm:
         theta_bar: tuple[Array1D, Array1D, Array1D],
         initial_guess: Array1D,
         use_prime_objective: bool = False,
-        my_setting: bool = True,
     ) -> jnp.ndarray:
         objective = self._make_objective(
             component=component,
@@ -529,7 +510,6 @@ class LoopEstimationAlgorithm:
             observation=observation,
             theta_bar=theta_bar,
             use_prime=use_prime_objective,
-            my_setting=my_setting,
         )
         bounds = self._bounds[component - 1]
         init = jnp.asarray(initial_guess)
@@ -576,7 +556,6 @@ class LoopEstimationAlgorithm:
         observation: Observation,
         theta_bar: tuple[Array1D, Array1D, Array1D],
         use_prime: bool,
-        my_setting: bool = True,
     ) -> cabc.Callable[[Array1D], jnp.ndarray]:
         x_series, y_series, h = observation.x_series, observation.y_series, observation.h
         theta_bar_jnp = tuple(jnp.asarray(v) for v in theta_bar)
@@ -587,7 +566,7 @@ class LoopEstimationAlgorithm:
                 )
                 if use_prime
                 else self._likelihood.make_quasi_likelihood_l1_evaluator(
-                    x_series, y_series, h, k_arg, my_setting=my_setting
+                    x_series, y_series, h, k_arg
                 )
             )
 

@@ -38,6 +38,15 @@ SympyTensorKey: TypeAlias = ImmutableDenseNDimArray | Basic
 JittedLikelihood: TypeAlias = Callable[[JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]
 
 
+def simplify_tensor(tensor: SympyTensor) -> SympyTensor:
+    """Return ``tensor`` with ``sympy.simplify`` applied elementwise when applicable."""
+    if isinstance(tensor, Array):
+        return Array(tensor.applyfunc(sp.simplify))
+    if isinstance(tensor, Basic):
+        return sp.simplify(tensor)
+    return tensor
+
+
 class SymbolicPreparationError(RuntimeError):
     """Raise when symbolic preprocessing fails fatally.
 
@@ -310,7 +319,7 @@ class InfinitesimalGenerator:
         if artifact is not None:
             return artifact
         if k == 0:
-            expr = normalized
+            expr = simplify_tensor(normalized)
             func = lambdify(
                 (
                     self.model.x,
@@ -327,6 +336,7 @@ class InfinitesimalGenerator:
             return artifact
         prev = self.L_0(f_tensor, k - 1)
         expr = self._apply_L(prev.expr) / S(k)
+        expr = simplify_tensor(expr)
         func = lambdify(
             (
                 self.model.x,
@@ -484,17 +494,10 @@ class QuasiLikelihoodEvaluator:
         S_yx_expr = Array(T_yx) - Array(U_yx)
         S_yy_expr = Array(T_yy) - Array(U_yy)
 
-        def _simplify_tensor(tensor: Array) -> Array:
-            """Apply ``sympy.simplify`` elementwise to remove redundant terms.
-
-            要素ごとに ``sympy.simplify`` を適用して冗長な式を減らす。
-            """
-            return Array(tensor.applyfunc(sp.simplify))
-
-        S_xx_expr = _simplify_tensor(S_xx_expr)
-        S_xy_expr = _simplify_tensor(S_xy_expr)
-        S_yx_expr = _simplify_tensor(S_yx_expr)
-        S_yy_expr = _simplify_tensor(S_yy_expr)
+        S_xx_expr = cast("Array", simplify_tensor(S_xx_expr))
+        S_xy_expr = cast("Array", simplify_tensor(S_xy_expr))
+        S_yx_expr = cast("Array", simplify_tensor(S_yx_expr))
+        S_yy_expr = cast("Array", simplify_tensor(S_yy_expr))
         lambdify_args = (
             self.model.x,
             self.model.y,

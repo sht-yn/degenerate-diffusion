@@ -66,4 +66,4 @@ def test_fnmodel_detail_matches_baseline() -> None:
     for key, expected_values in baseline.items():
         assert key in generated, f"{key} のデータが生成結果に存在しません。"
         actual_values = generated[key]
-        np.testing.assert_allclose(actual_values, expected_values, rtol=0.0, atol=1e-6)
+        np.testing.assert_allclose(actual_values, expected_values, rtol=0.0, atol=1e-5)

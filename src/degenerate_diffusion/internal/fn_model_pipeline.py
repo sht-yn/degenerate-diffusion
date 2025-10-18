@@ -163,7 +163,6 @@ def run_fnmodel_estimation(
     show_progress: bool = False,
     progress_desc: str | None = None,
     num_workers: int | None = None,
-    my_setting: bool = True,
 ) -> FnModelResults:
     """Execute the default FN-model loop estimation pipeline."""
     setup = create_fnmodel_setup()
@@ -181,7 +180,6 @@ def run_fnmodel_estimation(
         plan=setup.loop_plan,
         k_0=max(setup.loop_plan) - 1,
         initial_theta_stage0=setup.initial_theta_stage0,
-        my_setting=my_setting,
         show_progress=show_progress,
         progress_desc=progress_desc or "Seeds",
         num_workers=num_workers,
