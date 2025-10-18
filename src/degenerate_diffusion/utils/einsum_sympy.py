@@ -2,59 +2,55 @@ from collections import defaultdict
 from itertools import product
 
 import sympy as sp
-from sympy import ImmutableDenseNDimArray
+from sympy import Expr, ImmutableDenseNDimArray
 
 
-def einsum_sympy(subscripts, *operands):
-    """SymPy版 einsum: einsum_sympy("ij,kij->k", A, B)."""
+def _zero_expr() -> Expr:
+    """Return the additive identity for SymPy expressions."""
+    return sp.Integer(0)
+
+
+def einsum_sympy(subscripts: str, *operands: ImmutableDenseNDimArray) -> ImmutableDenseNDimArray:
+    """Compute Einstein summation for SymPy tensors.
+
+    Japanese: SymPy 配列を使ってアインシュタイン縮約を計算します。
+    """
     input_str, output_str = subscripts.replace(" ", "").split("->")
     input_subs = input_str.split(",")
 
-    # 入力テンソルのshapeと添字の対応を構築
-    shapes = [op.shape for op in operands]
-    dim_map = {}
-    dim_order = []
+    shapes: list[tuple[int, ...]] = [op.shape for op in operands]
+    dim_map: dict[str, int] = {}
+    dim_order: list[str] = []
     for subs, shape in zip(input_subs, shapes, strict=False):
-        assert len(subs) == len(shape), f"Subscript {subs} does not match shape {shape}"
-        for s, d in zip(subs, shape, strict=False):
-            if s in dim_map:
-                if dim_map[s] != d:
-                    msg = f"Inconsistent dimension for subscript '{s}': {dim_map[s]} vs {d}"
+        if len(subs) != len(shape):
+            msg = f"Subscript {subs} does not match shape {shape}"
+            raise ValueError(msg)
+        for index_symbol, dimension in zip(subs, shape, strict=False):
+            if index_symbol in dim_map:
+                if dim_map[index_symbol] != dimension:
+                    msg = (
+                        f"Inconsistent dimension for subscript '{index_symbol}': "
+                        f"{dim_map[index_symbol]} vs {dimension}"
+                    )
                     raise ValueError(msg)
             else:
-                dim_map[s] = d
-                dim_order.append(s)
+                dim_map[index_symbol] = dimension
+                dim_order.append(index_symbol)
 
-    # 全次元の順列を生成
-    full_indices = [range(dim_map[s]) for s in dim_order]
-    index_pos = {s: i for i, s in enumerate(dim_order)}
+    full_indices = [range(dim_map[symbol]) for symbol in dim_order]
+    index_pos: dict[str, int] = {symbol: position for position, symbol in enumerate(dim_order)}
 
-    # 出力のshape決定
-    output_shape = tuple(dim_map[s] for s in output_str)
+    output_shape: tuple[int, ...] = tuple(dim_map[symbol] for symbol in output_str)
 
-    # 結果を計算
-    result_dict = defaultdict(lambda: 0)
+    result_dict: defaultdict[tuple[int, ...], Expr] = defaultdict(_zero_expr)
     for full_idx in product(*full_indices):
-        term = 1
-        for subs, op in zip(input_subs, operands, strict=False):
-            op_idx = tuple(full_idx[index_pos[s]] for s in subs)
-            term *= op[op_idx]
-        out_idx = tuple(full_idx[index_pos[s]] for s in output_str)
-        result_dict[out_idx] += term
+        term: Expr = sp.Integer(1)
+        for subs, operand in zip(input_subs, operands, strict=False):
+            operand_index = tuple(full_idx[index_pos[symbol]] for symbol in subs)
+            term *= operand[operand_index]
+        output_index = tuple(full_idx[index_pos[symbol]] for symbol in output_str)
+        result_dict[output_index] += term
 
-    # 結果を ImmutableDenseNDimArray に変換
-    flat_data = []
-    for out_idx in product(*[range(d) for d in output_shape]):
-        flat_data.append(sp.simplify(result_dict[out_idx]))
+    output_ranges = [range(dimension) for dimension in output_shape]
+    flat_data = [sp.simplify(result_dict[output_index]) for output_index in product(*output_ranges)]
     return ImmutableDenseNDimArray(flat_data, output_shape)
-
-
-# # テスト：ベクトルのテンソル積 "i,j->ij"
-# x0, x1 = sp.symbols("x0 x1")
-# y0, y1, y2 = sp.symbols("y0 y1 y2")
-# u = ImmutableDenseNDimArray([x0, x1])  # shape (2,)
-# v = ImmutableDenseNDimArray([y0, y1, y2])  # shape (3,)
-
-# # outer product
-# tensor_product_result = einsum_sympy("i,j->ij", u, v)
-# tensor_product_result.shape, tensor_product_result

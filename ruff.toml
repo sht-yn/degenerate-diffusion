@@ -26,6 +26,7 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+
 ]
 
 line-length = 100
@@ -50,14 +51,20 @@ ignore = [
     "E117",
     "ISC001",
     "ISC002",
-    "N806",
     "Q000",
     "Q001",
     "Q002",
     "Q003",
     "W191",
     "T201",
+    "N802",
+    "N803",
+    "N806",
+    "N815",
+    "PLR0913",
+    "PLR2004",
 ]
+
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
@@ -65,6 +72,11 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.isort]
+known-first-party = ["degenerate_diffusion"] # ← 自分のパッケージ名を書く
+combine-as-imports = true
+
 
 [format]
 # Like Black, use double quotes for strings.
@@ -92,6 +104,4 @@ docstring-code-format = true
     "F405", # 未使用/ワイルドカード import
     "D",    # Docstring 全般
     "S",    # Bandit 系（実験ノートで警告がち）
-    "T201", # print
-    "N806", # 大文字変数など命名
 ]
