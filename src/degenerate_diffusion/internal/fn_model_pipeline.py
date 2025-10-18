@@ -129,12 +129,14 @@ def create_fnmodel_setup() -> FnModelSetup:
         t_max=10.0,
         h=0.05,
         burn_out=50.0,
-        dt=0.01,
+        dt=0.001,
     )
 
     loop_plan: EstimatorPlan = {
         1: ("B", "B", "B"),
         2: ("M", "M", "M"),
+        3: ("M", "M", "M"),
+        4: ("M", "M", "M"),
     }
 
     return FnModelSetup(
@@ -151,7 +153,7 @@ def create_fnmodel_setup() -> FnModelSetup:
             jnp.array([0.5, 0.5]),
             jnp.array([0.2, 0.1]),
         ),
-        model_label="FNmodel_kai_10141537",
+        model_label="FNmodel_test",
     )
 
 
@@ -173,11 +175,11 @@ def run_fnmodel_estimation(
         bounds_theta3=setup.bounds_theta3,
     )
 
-    seed_iterable = seeds if seeds is not None else range(50)
+    seed_iterable = seeds if seeds is not None else range(1)
     loop_results = estimator.run(
         seeds=seed_iterable,
         plan=setup.loop_plan,
-        k_0=max(setup.loop_plan),
+        k_0=max(setup.loop_plan) - 1,
         initial_theta_stage0=setup.initial_theta_stage0,
         my_setting=my_setting,
         show_progress=show_progress,

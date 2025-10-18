@@ -436,6 +436,19 @@ class LoopEstimationAlgorithm:
             )
             stage0_prev = tuple(jnp.asarray(v) for v in (theta1_k0, theta2_k0, theta3_k0))
             theta_stage0_snapshot = stage0_prev
+            if k == 1:
+                theta3_final = self._estimate_component(
+                    estimator_kind=plan[k + 1][2],
+                    component=3,
+                    k_arg=1,
+                    observation=observation,
+                    theta_bar=stage0_prev,
+                    initial_guess=stage0_prev[2],
+                )
+            else:
+                theta3_final = stage0_prev[2]
+
+            stage0_prev = (stage0_prev[0], stage0_prev[1], theta3_final)
 
             theta1_final = self._estimate_component(
                 estimator_kind=plan[k + 1][0],
@@ -448,17 +461,6 @@ class LoopEstimationAlgorithm:
                 my_setting=my_setting,
             )
             theta2_final = stage0_prev[1]
-            if k_0 == 1:
-                theta3_final = self._estimate_component(
-                    estimator_kind=plan[k + 1][2],
-                    component=3,
-                    k_arg=1,
-                    observation=observation,
-                    theta_bar=stage0_prev,
-                    initial_guess=stage0_prev[2],
-                )
-            else:
-                theta3_final = stage0_prev[2]
 
             iterations.append(
                 IterationEstimate(

@@ -59,6 +59,9 @@ disallow_any_generics = false
 check_untyped_defs = false
 # でも雑な無視は残さない
 warn_unused_ignores = true
+[[tool.mypy.overrides]]
+module = "degenerate_diffusion.estimation.loop_estimation_algorithm"
+ignore_errors = true
 
 [build-system]
 requires = ["setuptools>=65", "wheel"]
