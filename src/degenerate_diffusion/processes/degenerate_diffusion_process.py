@@ -1,16 +1,17 @@
-# %%
-# dataclassをインポート
-from dataclasses import dataclass
-from functools import partial
+from __future__ import annotations
 
-# import math # roundは組み込み関数のため不要
-# jax関連のライブラリを全てインポート
+from dataclasses import dataclass, field
+from functools import partial
+from typing import TYPE_CHECKING
+
 import jax
 import numpy as np
 import sympy as sp
-from jax import lax  # For jax.lax.scan
-from jax import numpy as jnp
+from jax import lax, numpy as jnp
 from sympy import lambdify, symbols
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from degenerate_diffusion.utils.symbolic_artifact import SymbolicArtifact
 
@@ -18,12 +19,9 @@ from degenerate_diffusion.utils.symbolic_artifact import SymbolicArtifact
 # %%
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess:
-    """多次元の拡散過程と観測過程を扱うためのクラス。.
+    """Container for diffusion and observation dynamics defined with SymPy.
 
-    記号計算 (sympy) を用いてモデルを定義し、
-    数値計算 (numpy/jax) のための関数を lambdify で生成する。
-    `A` / `B` / `H` は `SymbolicArtifact` として保持され、
-    記号式と JAX 関数を一体で取り扱える。
+    SymPy で定義した拡散項と観測項を JAX で扱うためのコンテナ.
     """
 
     x: sp.Array
@@ -34,16 +32,29 @@ class DegenerateDiffusionProcess:
     A: sp.Array
     B: sp.Array
     H: sp.Array
+    A_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+        init=False,
+        repr=False,
+    )
+    B_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+        init=False,
+        repr=False,
+    )
+    H_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+        init=False,
+        repr=False,
+    )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Create JAX callables from the provided symbolic expressions.
+
+        SymPy の式から JAX 関数を構築する.
+        """
         common_args = (self.x, self.y)
-        try:
-            A_func = lambdify((*common_args, self.theta_2), self.A, modules="jax")
-            B_func = lambdify((*common_args, self.theta_1), self.B, modules="jax")
-            H_func = lambdify((*common_args, self.theta_3), self.H, modules="jax")
-        except Exception as e:
-            print(f"Error during lambdification in __post_init__: {e}")
-            raise
+
+        A_func = lambdify((*common_args, self.theta_2), self.A, modules="jax")
+        B_func = lambdify((*common_args, self.theta_1), self.B, modules="jax")
+        H_func = lambdify((*common_args, self.theta_3), self.H, modules="jax")
 
         object.__setattr__(
             self,
@@ -71,7 +82,7 @@ class DegenerateDiffusionProcess:
         theta_1_val: jnp.ndarray,  # 1
         theta_2_val: jnp.ndarray,  # 2
         theta_3_val: jnp.ndarray,  # 3
-        key: jax.random.PRNGKey,  # 4
+        key: jax.Array,  # 4
         t_max: float,  # 5: static
         burn_out: float,  # 6: static
         x0_val: jnp.ndarray,  # 7
@@ -79,9 +90,9 @@ class DegenerateDiffusionProcess:
         dt: float,  # 9: static
         step_stride_static: int,  # 10: static
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """JAX-optimized core simulation loop using Euler-Maruyama.
-        lax.scan length (total_steps_for_scan_py) and slice indices (start_index_py, step_stride_static)
-        are Python ints derived from static args.
+        """Run JAX based Euler Maruyama scan for the diffusion process.
+
+        Euler Maruyama 法による離散化を JAX の scan で実行する.
         """
         # Calculate total_steps_for_scan as Python int from static args
         _total_steps_for_scan_py_float = (t_max + burn_out) / dt
@@ -96,13 +107,17 @@ class DegenerateDiffusionProcess:
         start_index_py = min(start_index_py, total_steps_for_scan_py)  # Python min
         start_index_py = max(0, start_index_py)  # Python max, ensure non-negative
 
-        self.x.shape[0]
-        self.y.shape[0]
         r = self.B.expr.shape[1]
 
         dt_array = jnp.asarray(dt, dtype=theta_1_val.dtype)
 
-        def em_step(carry, _):
+        def em_step(
+            carry: tuple[jnp.ndarray, jnp.ndarray, jax.Array],
+            _: None,
+        ) -> tuple[
+            tuple[jnp.ndarray, jnp.ndarray, jax.Array],
+            tuple[jnp.ndarray, jnp.ndarray],
+        ]:
             xt, yt, current_key = carry
             key_dW, next_key_for_loop = jax.random.split(current_key)
 
@@ -121,7 +136,7 @@ class DegenerateDiffusionProcess:
         initial_carry = (x0_val, y0_val, key)
 
         # lax.scan uses the Python int total_steps_for_scan_py for its length
-        final_carry, (x_results, y_results) = lax.scan(
+        _, (x_results, y_results) = lax.scan(
             em_step, initial_carry, None, length=total_steps_for_scan_py
         )
 
@@ -145,6 +160,10 @@ class DegenerateDiffusionProcess:
         y0: np.ndarray | jnp.ndarray | None = None,
         dt: float = 0.001,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Simulate state and observation series via Euler Maruyama.
+
+        Euler Maruyama 法で状態系列と観測系列を生成する.
+        """
         if dt <= 0:
             msg = "dt must be positive."
             raise ValueError(msg)
@@ -264,7 +283,8 @@ if __name__ == "__main__":
             seed=1 + i,
         )
         print(
-            f"Simulation finished for T_MAX = {current_t_max}, H_STEP = {current_h_step}. Generated data shapes:"
+            "Simulation finished for T_MAX = "
+            f"{current_t_max}, H_STEP = {current_h_step}. Generated data shapes:"
         )
         print(f"x_series shape: {x_data.shape}")
         print(f"y_series shape: {y_data.shape}")
@@ -279,24 +299,23 @@ if __name__ == "__main__":
 
                 ax[0].plot(time_axis, np.asarray(x_data)[:, 0], label=f"{x_sym[0]!s} (Simulated)")
                 ax[0].set_ylabel(f"State {x_sym[0]!s}")
-                ax[0].grid(True)
+                ax[0].grid(visible=True)
                 ax[0].legend()
 
                 ax[1].plot(time_axis, np.asarray(y_data)[:, 0], label=f"{y_sym[0]!s} (Simulated)")
                 ax[1].set_xlabel("Time")
                 ax[1].set_ylabel(f"Observation {y_sym[0]!s}")
-                ax[1].grid(True)
+                ax[1].grid(visible=True)
                 ax[1].legend()
 
                 plt.suptitle(
-                    f"Simulated Degenerate Diffusion Process (JAX Optimized, T_MAX={current_t_max}, H_STEP={current_h_step})"
+                    "Simulated Degenerate Diffusion Process (JAX Optimized, "
+                    f"T_MAX={current_t_max}, H_STEP={current_h_step})"
                 )
-                plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+                plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
                 plt.show()
             except ImportError:
                 print("\nMatplotlib not found. Skipping plot.")
-            except Exception as e:
-                print(f"\nError during plotting: {e}")
     end_time = time.time()
     print(f"Total simulation time for 100 runs: {end_time - start_time:.2f} seconds")
 # %%
