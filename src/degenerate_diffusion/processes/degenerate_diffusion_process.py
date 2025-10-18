@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import jax
 import numpy as np
 import sympy as sp
-from jax import lax, numpy as jnp
+from jax import Array as JaxArray, lax, numpy as jnp
 from sympy import lambdify
 
 if TYPE_CHECKING:
@@ -31,15 +31,15 @@ class DegenerateDiffusionProcess:
     A: sp.Array
     B: sp.Array
     H: sp.Array
-    A_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+    A_func: Callable[[JaxArray, JaxArray, JaxArray], JaxArray] = field(
         init=False,
         repr=False,
     )
-    B_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+    B_func: Callable[[JaxArray, JaxArray, JaxArray], JaxArray] = field(
         init=False,
         repr=False,
     )
-    H_func: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray] = field(
+    H_func: Callable[[JaxArray, JaxArray, JaxArray], JaxArray] = field(
         init=False,
         repr=False,
     )
@@ -78,17 +78,17 @@ class DegenerateDiffusionProcess:
     @partial(jax.jit, static_argnums=(0, 5, 6, 9, 10))
     def _simulate_jax_core(
         self,  # 0: static
-        theta_1_val: jnp.ndarray,  # 1
-        theta_2_val: jnp.ndarray,  # 2
-        theta_3_val: jnp.ndarray,  # 3
-        key: jax.Array,  # 4
+        theta_1_val: JaxArray,  # 1
+        theta_2_val: JaxArray,  # 2
+        theta_3_val: JaxArray,  # 3
+        key: JaxArray,  # 4
         t_max: float,  # 5: static
         burn_out: float,  # 6: static
-        x0_val: jnp.ndarray,  # 7
-        y0_val: jnp.ndarray,  # 8
+        x0_val: JaxArray,  # 7
+        y0_val: JaxArray,  # 8
         dt: float,  # 9: static
         step_stride_static: int,  # 10: static
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple[JaxArray, JaxArray]:
         """Run JAX based Euler Maruyama scan for the diffusion process.
 
         Euler Maruyama 法による離散化を JAX の scan で実行する.
@@ -111,11 +111,11 @@ class DegenerateDiffusionProcess:
         dt_array = jnp.asarray(dt, dtype=theta_1_val.dtype)
 
         def em_step(
-            carry: tuple[jnp.ndarray, jnp.ndarray, jax.Array],
+            carry: tuple[JaxArray, JaxArray, JaxArray],
             _: None,
         ) -> tuple[
-            tuple[jnp.ndarray, jnp.ndarray, jax.Array],
-            tuple[jnp.ndarray, jnp.ndarray],
+            tuple[JaxArray, JaxArray, JaxArray],
+            tuple[JaxArray, JaxArray],
         ]:
             xt, yt, current_key = carry
             key_dW, next_key_for_loop = jax.random.split(current_key)
@@ -150,15 +150,15 @@ class DegenerateDiffusionProcess:
 
     def simulate(
         self,
-        true_theta: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
+        true_theta: tuple[JaxArray, JaxArray, JaxArray],
         t_max: float,
         h: float,
         burn_out: float,
         seed: int = 42,
-        x0: np.ndarray | jnp.ndarray | None = None,
-        y0: np.ndarray | jnp.ndarray | None = None,
+        x0: np.ndarray | JaxArray | None = None,
+        y0: np.ndarray | JaxArray | None = None,
         dt: float = 0.001,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple[JaxArray, JaxArray]:
         """Simulate state and observation series via Euler Maruyama.
 
         Euler Maruyama 法で状態系列と観測系列を生成する.

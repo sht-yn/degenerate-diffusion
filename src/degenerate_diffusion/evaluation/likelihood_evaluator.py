@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import jax
 import jax.numpy as jnp
 import sympy as sp
-from jax import lax
+from jax import Array as JaxArray, lax
 from sympy import (
     Array,
     Basic,
@@ -19,8 +20,6 @@ from sympy import (
     lambdify,
     log,
     tensorproduct,
-)
-from sympy import (
     zeros as sp_zeros,
 )
 from sympy.matrices.common import NonInvertibleMatrixError
@@ -34,16 +33,24 @@ if TYPE_CHECKING:
     )
 
 
-SympyTensor = Array | Expr | Basic
+SympyTensor: TypeAlias = Array | Basic
+SympyTensorKey: TypeAlias = ImmutableDenseNDimArray | Basic
+JittedLikelihood: TypeAlias = Callable[[JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]
 
 
 class SymbolicPreparationError(RuntimeError):
-    """記号計算による前処理が致命的に失敗した際に送出される例外。"""
+    """Raise when symbolic preprocessing fails fatally.
+
+    記号計算による前処理が致命的に失敗した際に送出される例外。
+    """
 
 
 @dataclass(frozen=True)
 class SymbolicPrecomputation:
-    """記号的な前処理結果と対応する関数群をまとめたデータコンテナ。"""
+    """Collect symbolic preprocessing artifacts and compiled callables.
+
+    記号的な前処理結果と対応する関数群をまとめたデータコンテナ。
+    """
 
     A: SymbolicArtifact
     B: SymbolicArtifact
@@ -64,14 +71,23 @@ class SymbolicPrecomputation:
 
 
 class SymbolicLikelihoodPreparer:
-    """疑似尤度の評価に必要な記号的な素材を生成するヘルパー。"""
+    """Prepare symbolic ingredients for likelihood evaluation.
+
+    疑似尤度の評価に必要な記号的な素材を生成するヘルパー。
+    """
 
     def __init__(self, model: DegenerateDiffusionProcess) -> None:
-        """記号処理の対象となる拡散過程 `model` を保持する。"""
+        """Store the diffusion model that supplies symbolic expressions.
+
+        記号処理の対象となる拡散過程 `model` を保持する。
+        """
         self.model = model
 
     def prepare(self) -> SymbolicPrecomputation:
-        """モデルに対して計算した記号式と lambdify 済み関数をまとめて返す。"""
+        """Return symbolic expressions and lambdified functions for the model.
+
+        モデルに対して計算した記号式と lambdify 済み関数をまとめて返す。
+        """
         x_sym = self.model.x
         y_sym = self.model.y
         theta_1 = self.model.theta_1
@@ -224,12 +240,18 @@ class SymbolicLikelihoodPreparer:
 
 
 class InfinitesimalGenerator:
-    """無限小生成作用素 L を繰り返し適用するための補助クラス。"""
+    """Help apply the infinitesimal generator iteratively.
+
+    無限小生成作用素 L を繰り返し適用するための補助クラス。
+    """
 
     def __init__(
         self, model: DegenerateDiffusionProcess, symbolics: SymbolicPrecomputation
     ) -> None:
-        """生成作用素の結果をキャッシュし、繰り返し計算を効率化する。"""
+        """Cache generator results to accelerate repeated evaluations.
+
+        生成作用素の結果をキャッシュし、繰り返し計算を効率化する。
+        """
         self.model = model
         self.symbolics = symbolics
         self._L0_cache: dict[tuple[int, Any], SymbolicArtifact] = {}
@@ -239,13 +261,18 @@ class InfinitesimalGenerator:
             return tensor
         if isinstance(tensor, ImmutableDenseNDimArray):
             return Array(tensor)
-        if isinstance(tensor, (Expr, Basic)):
+        if isinstance(tensor, Basic):
             return tensor
-        return sp.sympify(tensor)
+        sympified = sp.sympify(tensor)
+        if isinstance(sympified, Basic):
+            return sympified
+        msg = f"Unsupported tensor type after sympify: {type(sympified)}"
+        raise TypeError(msg)
 
-    def _tensor_cache_key(self, tensor: SympyTensor) -> Any:
+    def _tensor_cache_key(self, tensor: SympyTensor) -> SympyTensorKey:
         if isinstance(tensor, Array):
-            return tensor.as_immutable()
+            immutable: ImmutableDenseNDimArray = tensor.as_immutable()
+            return immutable
         return tensor
 
     def _apply_L(self, tensor: SympyTensor) -> SympyTensor:
@@ -270,6 +297,10 @@ class InfinitesimalGenerator:
         return term1 + term2 + term3
 
     def L_0(self, f_tensor: Basic, k: int) -> SymbolicArtifact:
+        """Apply the generator ``k`` times and cache the resulting artifact.
+
+        生成作用素を ``k`` 回適用した結果をキャッシュ付きで返す。
+        """
         if k < 0:
             msg = "k must be non-negative"
             raise ValueError(msg)
@@ -313,7 +344,10 @@ class InfinitesimalGenerator:
 
 
 class QuasiLikelihoodEvaluator:
-    """記号計算の成果物を使って疑似尤度を数値評価するためのクラス。"""
+    """Evaluate quasi-likelihoods numerically from symbolic artifacts.
+
+    記号計算の成果物を使って疑似尤度を数値評価するためのクラス。
+    """
 
     def __init__(
         self,
@@ -321,7 +355,10 @@ class QuasiLikelihoodEvaluator:
         symbolics: SymbolicPrecomputation,
         generator: InfinitesimalGenerator,
     ) -> None:
-        """疑似尤度の走査に必要な記号データと補助クラスを束ねて保持する。"""
+        """Bundle the symbolic data and generator required for quasi-likelihood scans.
+
+        疑似尤度の走査に必要な記号データと補助クラスを束ねて保持する。
+        """
         self.model = model
         self.symbolics = symbolics
         self.generator = generator
@@ -332,17 +369,20 @@ class QuasiLikelihoodEvaluator:
     def Dx_func(
         self,
         L0_x_funcs: tuple[Callable, ...],
-        x_j: jnp.ndarray,
-        x_j_1: jnp.ndarray,
-        y_j_1: jnp.ndarray,
-        theta_2_val: jnp.ndarray,
-        theta_1_bar: jnp.ndarray,
-        theta_2_bar: jnp.ndarray,
-        theta_3_bar: jnp.ndarray,
+        x_j: JaxArray,
+        x_j_1: JaxArray,
+        y_j_1: JaxArray,
+        theta_2_val: JaxArray,
+        theta_1_bar: JaxArray,
+        theta_2_bar: JaxArray,
+        theta_3_bar: JaxArray,
         h: float,
         k_arg: int,
-    ) -> jnp.ndarray:
-        r"""疑似尤度で利用する \(\Delta x\) をスケール済みで算出する。"""
+    ) -> JaxArray:
+        r"""Compute the scaled \(\Delta x\) used by the quasi-likelihood.
+
+        疑似尤度で利用する \(\Delta x\) をスケール済みで算出する。
+        """
         if h <= 0:
             msg = "h must be positive in Dx_func"
             raise ValueError(msg)
@@ -355,9 +395,11 @@ class QuasiLikelihoodEvaluator:
             args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
             for m_loop in range(2, k_arg + 1):
                 if m_loop >= len(L0_x_funcs):
-                    raise IndexError(
-                        f"Dx_func requested L0_x_funcs[{m_loop}] but only {len(L0_x_funcs)} terms are available."
+                    msg = (
+                        f"L0_x_funcs index {m_loop} unavailable; "
+                        f"only {len(L0_x_funcs)} terms present."
                     )
+                    raise IndexError(msg)
                 h_pow_m = jnp.power(h, float(m_loop))
                 L0_x_m_val = L0_x_funcs[m_loop](*args_for_L0_bar)
                 D_x -= DX_SCALE * h_pow_m * L0_x_m_val
@@ -366,17 +408,20 @@ class QuasiLikelihoodEvaluator:
     def Dy_func(
         self,
         L0_y_funcs: tuple[Callable, ...],
-        y_j: jnp.ndarray,
-        y_j_1: jnp.ndarray,
-        x_j_1: jnp.ndarray,
-        theta_3_val: jnp.ndarray,
-        theta_1_bar: jnp.ndarray,
-        theta_2_bar: jnp.ndarray,
-        theta_3_bar: jnp.ndarray,
+        y_j: JaxArray,
+        y_j_1: JaxArray,
+        x_j_1: JaxArray,
+        theta_3_val: JaxArray,
+        theta_1_bar: JaxArray,
+        theta_2_bar: JaxArray,
+        theta_3_bar: JaxArray,
         h: float,
         k_arg: int,
-    ) -> jnp.ndarray:
-        r"""疑似尤度で利用する \(\Delta y\) をスケール済みで算出する。"""
+    ) -> JaxArray:
+        r"""Compute the scaled \(\Delta y\) used by the quasi-likelihood.
+
+        疑似尤度で利用する \(\Delta y\) をスケール済みで算出する。
+        """
         if h <= 0:
             return jnp.zeros_like(y_j, dtype=y_j.dtype)
         DY_SCALE = jnp.power(h, -1.5)
@@ -390,9 +435,11 @@ class QuasiLikelihoodEvaluator:
             args_for_L0_bar = (x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
             for m_loop in range(3, k_arg + 2):
                 if m_loop >= len(L0_y_funcs):
-                    raise IndexError(
-                        f"Dy_func requested L0_y_funcs[{m_loop}] but only {len(L0_y_funcs)} terms are available."
+                    msg = (
+                        f"L0_y_funcs index {m_loop} unavailable; "
+                        f"only {len(L0_y_funcs)} terms present."
                     )
+                    raise IndexError(msg)
                 h_pow_m = jnp.power(h, float(m_loop))
                 L0_y_m_val = L0_y_funcs[m_loop](*args_for_L0_bar)
                 D_y -= DY_SCALE * h_pow_m * L0_y_m_val
@@ -401,7 +448,10 @@ class QuasiLikelihoodEvaluator:
     def S(
         self, k: int
     ) -> tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]:
-        """次数 `k` の `S` テンソルを計算し、式と JAX 関数のペアを返す。"""
+        """Compute the order-`k` S tensors and return expression/function pairs.
+
+        次数 `k` の `S` テンソルを計算し、式と JAX 関数のペアを返す。
+        """
         if k in self._S_cache:
             return self._S_cache[k]
         x_sym = self.model.x
@@ -435,7 +485,10 @@ class QuasiLikelihoodEvaluator:
         S_yy_expr = Array(T_yy) - Array(U_yy)
 
         def _simplify_tensor(tensor: Array) -> Array:
-            """要素ごとに `sympy.simplify` を適用して冗長な式を減らす。"""
+            """Apply ``sympy.simplify`` elementwise to remove redundant terms.
+
+            要素ごとに ``sympy.simplify`` を適用して冗長な式を減らす。
+            """
             return Array(tensor.applyfunc(sp.simplify))
 
         S_xx_expr = _simplify_tensor(S_xx_expr)
@@ -463,17 +516,25 @@ class QuasiLikelihoodEvaluator:
 
     @staticmethod
     def a(n: int, h: float, k: int, i: int) -> float:
-        "a_n^hを計算する"
+        """Compute the scaling factor :math:`a_n^h`.
+
+        :math:`a_n^h` を計算する。
+        """
+        n_float = float(n)
+        h_float = float(h)
+        pow_k = math.pow(h_float, float(k))
         if i == 1:
-            return n ** (-1 / 2) + h**k
-        if i == 2:  # noqa: PLR2004
-            return (n * h) ** (-1 / 2) + h**k
-        return (h / n) ** (1 / 2) + h ** (k + 1)
+            return math.pow(n_float, -0.5) + pow_k
+        if i == 2:
+            return math.pow(n_float * h_float, -0.5) + pow_k
+        return math.pow(h_float / n_float, 0.5) + math.pow(h_float, float(k + 1))
 
     def make_quasi_likelihood_l1_prime_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """`S_0` を省略した簡略版疑似尤度 l1' の評価関数を生成して返す。
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the simplified quasi-likelihood :math:`l_1'` evaluator without ``S_0``.
+
+        The returned callable is wrapped with ``jax.jit``。
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -494,11 +555,11 @@ class QuasiLikelihoodEvaluator:
         d_x = self.model.x.shape[0]
 
         def evaluate_l1_prime(
-            theta_1_val: jnp.ndarray,
-            theta_1_bar: jnp.ndarray,
-            theta_2_bar: jnp.ndarray,
-            theta_3_bar: jnp.ndarray,
-        ) -> float:
+            theta_1_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+        ) -> JaxArray:
             theta_1_val = jnp.asarray(theta_1_val)
             theta_1_bar = jnp.asarray(theta_1_bar)
             theta_2_bar = jnp.asarray(theta_2_bar)
@@ -511,7 +572,10 @@ class QuasiLikelihoodEvaluator:
                 theta_3_bar.dtype,
             )
 
-            def scan_body(total, step_inputs):
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
                 x_j, x_j_1, y_j_1 = step_inputs
                 invC_val = invC_func(x_j_1, y_j_1, theta_1_val)
                 logDetC_val = logDetC_func(x_j_1, y_j_1, theta_1_val)
@@ -554,18 +618,18 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_l1_prime)
+        return cast("JittedLikelihood", jax.jit(evaluate_l1_prime))
 
-    def make_quasi_likelihood_l1_evaluator(
+    def make_quasi_likelihood_l1_evaluator(  # noqa: PLR0915
         self,
-        x_series: jnp.ndarray,
-        y_series: jnp.ndarray,
+        x_series: JaxArray,
+        y_series: JaxArray,
         h: float,
         k: int,
-        *,
-        my_setting: bool = True,
-    ) -> Callable:
-        """`S_0` の補正を含めた疑似尤度 l1 の評価関数を生成して返す。
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_1` evaluator with the ``S_0`` correction.
+
+        The returned callable is wrapped with ``jax.jit``.
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -579,16 +643,10 @@ class QuasiLikelihoodEvaluator:
 
         L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
         L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 1))
-        if my_setting:
-            S_funcs = tuple(
-                (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
-                for l_s in range(1, k)
-            )
-        else:
-            S_funcs = tuple(
-                (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
-                for l_s in range(1, k - 1)
-            )
+        S_funcs = tuple(
+            (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
+            for l_s in range(1, k)
+        )
         inv_S0_xx_func = self.symbolics.inv_S0_xx.func
         inv_S0_xy_func = self.symbolics.inv_S0_xy.func
         inv_S0_yx_func = self.symbolics.inv_S0_yx.func
@@ -599,11 +657,11 @@ class QuasiLikelihoodEvaluator:
         d_y = self.model.y.shape[0]
 
         def evaluate_l1(
-            theta_1_val: jnp.ndarray,
-            theta_1_bar: jnp.ndarray,
-            theta_2_bar: jnp.ndarray,
-            theta_3_bar: jnp.ndarray,
-        ) -> float:
+            theta_1_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+        ) -> JaxArray:
             theta_1_val = jnp.asarray(theta_1_val)
             theta_1_bar = jnp.asarray(theta_1_bar)
             theta_2_bar = jnp.asarray(theta_2_bar)
@@ -616,7 +674,10 @@ class QuasiLikelihoodEvaluator:
                 theta_3_bar.dtype,
             )
 
-            def scan_body(total, step_inputs):
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
                 x_j, y_j, x_j_1, y_j_1 = step_inputs
                 inv_S0_xx_val = inv_S0_xx_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
                 inv_S0_xy_val = inv_S0_xy_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
@@ -665,7 +726,6 @@ class QuasiLikelihoodEvaluator:
                     sum_S_yx += h_power * s_yx
                     sum_S_yy += h_power * s_yy
 
-                # ここまで読んだぞ
                 q_xx = jnp.einsum("ij,i,j->", inv_S0_xx_val, Dx_val, Dx_val)
                 q_xy = jnp.einsum("ij,i,j->", inv_S0_xy_val, Dx_val, Dy_val)
                 q_yx = jnp.einsum("ij,i,j->", inv_S0_yx_val, Dy_val, Dx_val)
@@ -703,12 +763,14 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_l1)
+        return cast("JittedLikelihood", jax.jit(evaluate_l1))
 
     def make_quasi_likelihood_l2_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """パラメータ theta_2 を推定するための疑似尤度 l2 評価関数を生成する。
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_2` evaluator for estimating ``theta_2``.
+
+        The returned callable is wrapped with ``jax.jit``.
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -724,11 +786,11 @@ class QuasiLikelihoodEvaluator:
         invC_func = self.symbolics.inv_C.func
 
         def evaluate_l2(
-            theta_2_val: jnp.ndarray,
-            theta_1_bar: jnp.ndarray,
-            theta_2_bar: jnp.ndarray,
-            theta_3_bar: jnp.ndarray,
-        ) -> float:
+            theta_2_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+        ) -> JaxArray:
             theta_2_val = jnp.asarray(theta_2_val)
             theta_1_bar = jnp.asarray(theta_1_bar)
             theta_2_bar = jnp.asarray(theta_2_bar)
@@ -741,7 +803,10 @@ class QuasiLikelihoodEvaluator:
                 theta_3_bar.dtype,
             )
 
-            def scan_body(total, step_inputs):
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
                 x_j, x_j_1, y_j_1 = step_inputs
                 invC_val = invC_func(x_j_1, y_j_1, theta_1_bar)
                 Dx_val = self.Dx_func(
@@ -775,12 +840,14 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_l2)
+        return cast("JittedLikelihood", jax.jit(evaluate_l2))
 
     def make_quasi_likelihood_l3_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """パラメータ theta_3 を推定するための疑似尤度 l3 評価関数を生成する。
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_3` evaluator for estimating ``theta_3``.
+
+        The returned callable is wrapped with ``jax.jit``.
 
         返される関数には JAX の ``jit`` が適用される。
         """
@@ -799,11 +866,11 @@ class QuasiLikelihoodEvaluator:
         pHTinvV_func = self.symbolics.partial_x_H_transpose_inv_V.func
 
         def evaluate_l3(
-            theta_3_val: jnp.ndarray,
-            theta_1_bar: jnp.ndarray,
-            theta_2_bar: jnp.ndarray,
-            theta_3_bar: jnp.ndarray,
-        ) -> float:
+            theta_3_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+        ) -> JaxArray:
             theta_3_val = jnp.asarray(theta_3_val)
             theta_1_bar = jnp.asarray(theta_1_bar)
             theta_2_bar = jnp.asarray(theta_2_bar)
@@ -816,7 +883,10 @@ class QuasiLikelihoodEvaluator:
                 theta_3_bar.dtype,
             )
 
-            def scan_body(total, step_inputs):
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
                 x_j, y_j, x_j_1, y_j_1 = step_inputs
                 invV_val = invV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
                 pHTinvV_val = pHTinvV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
@@ -871,11 +941,14 @@ class QuasiLikelihoodEvaluator:
                 )
             return jnp.full_like(total_log_likelihood, jnp.nan)
 
-        return jax.jit(evaluate_l3)
+        return cast("JittedLikelihood", jax.jit(evaluate_l3))
 
 
 class LikelihoodEvaluator:
-    """記号準備と疑似尤度評価をまとめて扱うファサードクラス。"""
+    """Facade that pairs symbolic preparation with quasi-likelihood evaluation.
+
+    記号準備と疑似尤度評価をまとめて扱うファサードクラス。
+    """
 
     def __init__(
         self,
@@ -883,7 +956,10 @@ class LikelihoodEvaluator:
         *,
         precomputed: SymbolicPrecomputation | None = None,
     ) -> None:
-        """`model` を中心に補助オブジェクトを構築し、必要なら既存の前処理結果を再利用する。"""
+        """Build helper objects around ``model`` and reuse precomputation when supplied.
+
+        ``model`` を中心に補助オブジェクトを構築し、必要なら既存の前処理結果を再利用する。
+        """
         self.model = model
         self.A = model.A
         self.B = model.B
@@ -893,50 +969,125 @@ class LikelihoodEvaluator:
         self.quasi = QuasiLikelihoodEvaluator(model, self.symbolics, self.generator)
 
     def L_0(self, f_tensor: Basic, k: int) -> Basic:
-        r"""内部の :class:`InfinitesimalGenerator` に委譲して \(L_0\) を計算する。"""
+        r"""Delegate to :class:`InfinitesimalGenerator` to evaluate \(L_0\).
+
+        内部の :class:`InfinitesimalGenerator` に委譲して \(L_0\) を計算する。
+        """
         return self.generator.L_0(f_tensor, k)
 
-    def Dx_func(self, *args: Any, **kwargs: Any) -> jnp.ndarray:
-        """:class:`QuasiLikelihoodEvaluator` の `Dx_func` を呼び出すショートカット。"""
-        return self.quasi.Dx_func(*args, **kwargs)
+    def Dx_func(
+        self,
+        L0_x_funcs: tuple[Callable, ...],
+        x_j: JaxArray,
+        x_j_1: JaxArray,
+        y_j_1: JaxArray,
+        theta_2_val: JaxArray,
+        theta_1_bar: JaxArray,
+        theta_2_bar: JaxArray,
+        theta_3_bar: JaxArray,
+        h: float,
+        k_arg: int,
+    ) -> JaxArray:
+        """Forward to :meth:`QuasiLikelihoodEvaluator.Dx_func` with explicit arguments.
 
-    def Dy_func(self, *args: Any, **kwargs: Any) -> jnp.ndarray:
-        """:class:`QuasiLikelihoodEvaluator` の `Dy_func` を呼び出すショートカット。"""
-        return self.quasi.Dy_func(*args, **kwargs)
+        :class:`QuasiLikelihoodEvaluator` の ``Dx_func`` を同じ引数で呼び出す。
+        """
+        return self.quasi.Dx_func(
+            L0_x_funcs,
+            x_j,
+            x_j_1,
+            y_j_1,
+            theta_2_val,
+            theta_1_bar,
+            theta_2_bar,
+            theta_3_bar,
+            h,
+            k_arg,
+        )
+
+    def Dy_func(
+        self,
+        L0_y_funcs: tuple[Callable, ...],
+        y_j: JaxArray,
+        y_j_1: JaxArray,
+        x_j_1: JaxArray,
+        theta_3_val: JaxArray,
+        theta_1_bar: JaxArray,
+        theta_2_bar: JaxArray,
+        theta_3_bar: JaxArray,
+        h: float,
+        k_arg: int,
+    ) -> JaxArray:
+        """Forward to :meth:`QuasiLikelihoodEvaluator.Dy_func` with explicit arguments.
+
+        :class:`QuasiLikelihoodEvaluator` の ``Dy_func`` を同じ引数で呼び出す。
+        """
+        return self.quasi.Dy_func(
+            L0_y_funcs,
+            y_j,
+            y_j_1,
+            x_j_1,
+            theta_3_val,
+            theta_1_bar,
+            theta_2_bar,
+            theta_3_bar,
+            h,
+            k_arg,
+        )
 
     def S(
         self, k: int
     ) -> tuple[SymbolicArtifact, SymbolicArtifact, SymbolicArtifact, SymbolicArtifact]:
-        """`S` テンソルの記号式と JAX 評価関数をまとめた成果物を返す。"""
+        """Return the symbolic and JAX artifacts for the ``S`` tensors.
+
+        ``S`` テンソルの記号式と JAX 評価関数をまとめた成果物を返す。
+        """
         return self.quasi.S(k)
 
     def make_quasi_likelihood_l1_prime_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """簡略版疑似尤度 l1' の評価関数を生成して返す。"""
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the simplified quasi-likelihood :math:`l_1'` evaluator.
+
+        The returned callable is wrapped with ``jax.jit``.
+
+        簡略版疑似尤度 :math:`l_1'` の評価関数を生成して返す。
+        """
         return self.quasi.make_quasi_likelihood_l1_prime_evaluator(x_series, y_series, h, k)
 
     def make_quasi_likelihood_l1_evaluator(
         self,
-        x_series: jnp.ndarray,
-        y_series: jnp.ndarray,
+        x_series: JaxArray,
+        y_series: JaxArray,
         h: float,
         k: int,
-        my_setting: bool = True,
-    ) -> Callable:
-        """補正込みの疑似尤度 l1 の評価関数を生成して返す。"""
-        return self.quasi.make_quasi_likelihood_l1_evaluator(
-            x_series, y_series, h, k, my_setting=my_setting
-        )
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_1` evaluator with optional correction.
+
+        The returned callable is wrapped with ``jax.jit``.
+
+        補正込みの疑似尤度 :math:`l_1` の評価関数を生成して返す。
+        """
+        return self.quasi.make_quasi_likelihood_l1_evaluator(x_series, y_series, h, k)
 
     def make_quasi_likelihood_l2_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """パラメータ theta_2 に特化した疑似尤度 l2 を評価する関数を生成する。"""
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_2` evaluator specialized for ``theta_2``.
+
+        The returned callable is wrapped with ``jax.jit``.
+
+        パラメータ ``theta_2`` に特化した疑似尤度 :math:`l_2` を評価する関数を生成する。
+        """
         return self.quasi.make_quasi_likelihood_l2_evaluator(x_series, y_series, h, k)
 
     def make_quasi_likelihood_l3_evaluator(
-        self, x_series: jnp.ndarray, y_series: jnp.ndarray, h: float, k: int
-    ) -> Callable:
-        """パラメータ theta_3 に特化した疑似尤度 l3 を評価する関数を生成する。"""
+        self, x_series: JaxArray, y_series: JaxArray, h: float, k: int
+    ) -> JittedLikelihood:
+        """Create the quasi-likelihood :math:`l_3` evaluator specialized for ``theta_3``.
+
+        The returned callable is wrapped with ``jax.jit``.
+
+        パラメータ ``theta_3`` に特化した疑似尤度 :math:`l_3` を評価する関数を生成する。
+        """
         return self.quasi.make_quasi_likelihood_l3_evaluator(x_series, y_series, h, k)
