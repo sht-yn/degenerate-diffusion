@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING
@@ -89,9 +90,10 @@ class DegenerateDiffusionProcess:
         dt: float,  # 9: static
         step_stride_static: int,  # 10: static
     ) -> tuple[JaxArray, JaxArray]:
-        """Run JAX based Euler Maruyama scan for the diffusion process.
+        """Run the JAX Euler Maruyama core, given prevalidated static settings.
 
-        Euler Maruyama 法による離散化を JAX の scan で実行する.
+        Euler Maruyama 法の JAX 実装コア. 静的な設定検証は呼び出し側
+        (make_simulation_kernel) で完了済みとする.
         """
         # Calculate total_steps_for_scan as Python int from static args
         _total_steps_for_scan_py_float = (t_max + burn_out) / dt
@@ -148,20 +150,21 @@ class DegenerateDiffusionProcess:
 
         return x_series, y_series
 
-    def simulate(
+    def make_simulation_kernel(
         self,
-        true_theta: tuple[JaxArray, JaxArray, JaxArray],
+        *,
         t_max: float,
         h: float,
         burn_out: float,
-        seed: int = 42,
-        x0: np.ndarray | JaxArray | None = None,
-        y0: np.ndarray | JaxArray | None = None,
         dt: float = 0.001,
-    ) -> tuple[JaxArray, JaxArray]:
-        """Simulate state and observation series via Euler Maruyama.
+    ) -> Callable[
+        [tuple[JaxArray, JaxArray, JaxArray], JaxArray, JaxArray, JaxArray],
+        tuple[JaxArray, JaxArray],
+    ]:
+        """Create a pure JAX kernel that simulates the process for given settings.
 
-        Euler Maruyama 法で状態系列と観測系列を生成する.
+        シミュレーション設定を束縛した純 JAX カーネルを返す。返された関数は
+        (true_theta, seed_key, x0, y0) を受け取り系列を出力する.
         """
         if dt <= 0:
             msg = "dt must be positive."
@@ -182,47 +185,91 @@ class DegenerateDiffusionProcess:
                 "Thinning interval might be slightly inaccurate due to rounding."
             )
 
-        step_stride_float_py = h / dt
-        step_stride_py = max(1, round(step_stride_float_py))  # Use built-in round()
+        step_stride_py = max(1, round(h / dt))
+        d_x = self.x.shape[0]
+        d_y = self.y.shape[0]
+
+        def _kernel(
+            true_theta: tuple[JaxArray, JaxArray, JaxArray],
+            seed_key: JaxArray,
+            x0: JaxArray,
+            y0: JaxArray,
+        ) -> tuple[JaxArray, JaxArray]:
+            theta_1_val, theta_2_val, theta_3_val = true_theta
+
+            theta_1_val = jnp.asarray(theta_1_val)
+            theta_2_val = jnp.asarray(theta_2_val)
+            theta_3_val = jnp.asarray(theta_3_val)
+
+            target_dtype = jnp.result_type(theta_1_val, theta_2_val, theta_3_val)
+
+            theta_1_val = theta_1_val.astype(target_dtype)
+            theta_2_val = theta_2_val.astype(target_dtype)
+            theta_3_val = theta_3_val.astype(target_dtype)
+
+            x0_val = jnp.reshape(jnp.asarray(x0, dtype=target_dtype), (d_x,))
+            y0_val = jnp.reshape(jnp.asarray(y0, dtype=target_dtype), (d_y,))
+
+            result = self._simulate_jax_core(
+                theta_1_val,
+                theta_2_val,
+                theta_3_val,
+                seed_key,
+                t_max,
+                burn_out,
+                x0_val,
+                y0_val,
+                dt,
+                step_stride_py,
+            )
+            return typing.cast("tuple[JaxArray, JaxArray]", result)
+
+        kernel = jax.jit(_kernel)
+
+        return typing.cast(
+            (
+                "typing.Callable[[tuple[JaxArray, JaxArray, JaxArray], "
+                "JaxArray, JaxArray, JaxArray], tuple[JaxArray, JaxArray]]"
+            ),
+            kernel,
+        )
+
+    def simulate(
+        self,
+        true_theta: tuple[JaxArray, JaxArray, JaxArray],
+        t_max: float,
+        h: float,
+        burn_out: float,
+        seed: int = 42,
+        x0: np.ndarray | JaxArray | None = None,
+        y0: np.ndarray | JaxArray | None = None,
+        dt: float = 0.001,
+    ) -> tuple[JaxArray, JaxArray]:
+        """Simulate state and observation series using the JAX kernel wrapper.
+
+        Euler Maruyama 法による系列生成。make_simulation_kernel が返す純 JAX カーネルを用いる.
+        """
+        kernel = self.make_simulation_kernel(
+            t_max=t_max,
+            h=h,
+            burn_out=burn_out,
+            dt=dt,
+        )
 
         key = jax.random.PRNGKey(seed)
 
         d_x = self.x.shape[0]
         d_y = self.y.shape[0]
 
+        x0_arr = jnp.zeros((d_x,)) if x0 is None else jnp.reshape(jnp.asarray(x0), (d_x,))
+        y0_arr = jnp.zeros((d_y,)) if y0 is None else jnp.reshape(jnp.asarray(y0), (d_y,))
+
         theta_1, theta_2, theta_3 = true_theta
-
-        theta_1_jnp = jnp.asarray(theta_1)
-        theta_2_jnp = jnp.asarray(theta_2)
-        theta_3_jnp = jnp.asarray(theta_3)
-
-        target_dtype = jnp.result_type(theta_1_jnp, theta_2_jnp, theta_3_jnp)
-
-        theta_1_jnp = theta_1_jnp.astype(target_dtype)
-        theta_2_jnp = theta_2_jnp.astype(target_dtype)
-        theta_3_jnp = theta_3_jnp.astype(target_dtype)
-
-        x0_jnp = (
-            jnp.zeros((d_x,), dtype=target_dtype)
-            if x0 is None
-            else jnp.reshape(jnp.asarray(x0, dtype=target_dtype), (d_x,))
-        )
-        y0_jnp = (
-            jnp.zeros((d_y,), dtype=target_dtype)
-            if y0 is None
-            else jnp.reshape(jnp.asarray(y0, dtype=target_dtype), (d_y,))
+        theta_tuple = (
+            jnp.asarray(theta_1),
+            jnp.asarray(theta_2),
+            jnp.asarray(theta_3),
         )
 
-        x_series_jax, y_series_jax = self._simulate_jax_core(
-            theta_1_jnp,
-            theta_2_jnp,
-            theta_3_jnp,
-            key,
-            t_max,
-            burn_out,
-            x0_jnp,
-            y0_jnp,
-            dt,
-            step_stride_py,
-        )
+        x_series_jax, y_series_jax = kernel(theta_tuple, key, x0_arr, y0_arr)
         return x_series_jax, y_series_jax
