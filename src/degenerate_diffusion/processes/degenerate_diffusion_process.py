@@ -8,7 +8,7 @@ import jax
 import numpy as np
 import sympy as sp
 from jax import lax, numpy as jnp
-from sympy import lambdify, symbols
+from sympy import lambdify
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 from degenerate_diffusion.utils.symbolic_artifact import SymbolicArtifact
 
 
-# %%
 @dataclass(frozen=True)
 class DegenerateDiffusionProcess:
     """Container for diffusion and observation dynamics defined with SymPy.
@@ -227,95 +226,3 @@ class DegenerateDiffusionProcess:
             step_stride_py,
         )
         return x_series_jax, y_series_jax
-
-
-# %%
-if __name__ == "__main__":
-    x_sym = sp.Array([symbols("x_0")])
-    y_sym = sp.Array([symbols("y_0")])
-    theta1_sym = sp.Array([symbols("sigma")])
-    theta2_sym = sp.Array([symbols("kappa")])
-    theta3_sym = sp.Array([symbols("mu_y")])
-
-    A_expr = sp.Array([-theta2_sym[0] * x_sym[0]])
-    B_expr = sp.Array([[theta1_sym[0]]])
-    H_expr = sp.Array([theta3_sym[0] * x_sym[0]])
-
-    process = DegenerateDiffusionProcess(
-        x=x_sym,
-        y=y_sym,
-        theta_1=theta1_sym,
-        theta_2=theta2_sym,
-        theta_3=theta3_sym,
-        A=A_expr,
-        B=B_expr,
-        H=H_expr,
-    )
-    # %%
-    true_sigma = jnp.array([0.5], dtype=jnp.float32)
-    true_kappa = jnp.array([1.0], dtype=jnp.float32)
-    true_mu_y = jnp.array([0.2], dtype=jnp.float32)
-    true_thetas = (true_sigma, true_kappa, true_mu_y)
-
-    T_MAX = 100.0
-    H_STEP = 0.1
-    BURN_OUT = 100.0
-    DT_SIM = 0.001
-
-    # %%
-
-    print("Simulating with JAX-optimized method...")
-    import time
-
-    start_time = time.time()
-    for i in range(10):
-        current_t_max = T_MAX
-        current_h_step = H_STEP
-        print(f"Running simulation with T_MAX = {current_t_max}, H_STEP = {current_h_step}")
-        x_data, y_data = process.simulate(
-            true_theta=true_thetas,
-            t_max=current_t_max,
-            h=current_h_step,
-            burn_out=BURN_OUT,
-            dt=DT_SIM,
-            x0=jnp.array([0.0], dtype=jnp.float32),
-            y0=jnp.array([0.0], dtype=jnp.float32),
-            seed=1 + i,
-        )
-        print(
-            "Simulation finished for T_MAX = "
-            f"{current_t_max}, H_STEP = {current_h_step}. Generated data shapes:"
-        )
-        print(f"x_series shape: {x_data.shape}")
-        print(f"y_series shape: {y_data.shape}")
-
-        if i == 0:
-            try:
-                import matplotlib.pyplot as plt
-
-                time_axis = np.arange(x_data.shape[0]) * current_h_step
-
-                fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
-
-                ax[0].plot(time_axis, np.asarray(x_data)[:, 0], label=f"{x_sym[0]!s} (Simulated)")
-                ax[0].set_ylabel(f"State {x_sym[0]!s}")
-                ax[0].grid(visible=True)
-                ax[0].legend()
-
-                ax[1].plot(time_axis, np.asarray(y_data)[:, 0], label=f"{y_sym[0]!s} (Simulated)")
-                ax[1].set_xlabel("Time")
-                ax[1].set_ylabel(f"Observation {y_sym[0]!s}")
-                ax[1].grid(visible=True)
-                ax[1].legend()
-
-                plt.suptitle(
-                    "Simulated Degenerate Diffusion Process (JAX Optimized, "
-                    f"T_MAX={current_t_max}, H_STEP={current_h_step})"
-                )
-                plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
-                plt.show()
-            except ImportError:
-                print("\nMatplotlib not found. Skipping plot.")
-    end_time = time.time()
-    print(f"Total simulation time for 100 runs: {end_time - start_time:.2f} seconds")
-# %%
