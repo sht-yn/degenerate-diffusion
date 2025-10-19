@@ -3,8 +3,6 @@
 from . import utils
 from .estimation import (
     bayes_estimate,
-    m_estimate,
-    m_estimate_jax,
     newton_solve,
     one_step_estimate,
 )
@@ -15,8 +13,6 @@ __all__ = [
     "DegenerateDiffusionProcess",
     "LikelihoodEvaluator",
     "bayes_estimate",
-    "m_estimate",
-    "m_estimate_jax",
     "newton_solve",
     "one_step_estimate",
     "utils",

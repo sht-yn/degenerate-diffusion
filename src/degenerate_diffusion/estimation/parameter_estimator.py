@@ -22,7 +22,7 @@ Array1D = jnp.ndarray
 
 
 def _normalize_bounds(search_bounds: Bounds) -> jnp.ndarray:
-    if not isinstance(search_bounds, Sequence):  # type: ignore[arg-type]
+    if not isinstance(search_bounds, Sequence):
         msg = "search_bounds must be a sequence of (low, high) tuples."
         raise TypeError(msg)
 
@@ -60,10 +60,11 @@ def newton_solve(
     fallback_weight_decay: float = 0.0,
     clip_norm: float = 1e2,
 ) -> np.ndarray:
-    """多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。
+    """Solve the estimating equation ``∇θ V(θ) = 0`` via a multidimensional Newton method.
 
-    ``damping`` を 1 未満にすると過大ステップを抑えられる。解が境界の外に出そうな場合でも
-    ``_clip`` で常に ``search_bounds`` 内に戻す。
+    多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。``damping`` を 1 未満にすると過大
+    ステップを抑えられる。解が境界の外に出そうな場合でも ``_clip`` で常に ``search_bounds``
+    内に戻す。
     """
     bounds_raw = _normalize_bounds(search_bounds)
     theta = jnp.asarray(initial_guess)
@@ -225,159 +226,8 @@ def bayes_estimate(
     return np.asarray(posterior_mean)
 
 
-def m_estimate(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
-    *,
-    learning_rate: float = 1e-3,
-    max_iters: int = 5000,
-    tol: float = 1e-6,
-    log_interval: int | None = None,
-) -> np.ndarray:
-    """Gradient-ascent M-estimation implemented with JAX.
-
-    The ``learning_rate`` の既定値を ``1e-3`` に下げ、必要に応じて ``log_interval`` (反復回数) で
-    勾配ノルムと現在の θ をログ表示できるようにした。
-    """
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess)
-
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta0.dtype)
-
-    @jax.jit
-    def step(theta: Array1D) -> tuple[Array1D, jnp.ndarray]:
-        grad = jax.grad(objective_function)(theta)
-        theta_next = theta + learning_rate * grad
-        theta_next = _clip(theta_next, bounds)
-        grad_norm = jnp.linalg.norm(grad)
-        return theta_next, grad_norm
-
-    theta_opt = theta0
-    grad_norm_value = float("inf")
-    for iteration in range(1, max_iters + 1):
-        theta_opt, grad_norm = step(theta_opt)
-        grad_norm_value = float(grad_norm)
-        if log_interval and iteration % log_interval == 0:
-            print(
-                f"[m_estimate] iter={iteration} grad_norm={grad_norm_value:.3e} theta={theta_opt}"
-            )
-        if grad_norm_value <= tol:
-            break
-
-    return np.asarray(theta_opt)
-
-
-def m_estimate_jax(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
-    *,
-    learning_rate: float = 1e-3,
-    max_iters: int = 1000,
-    tol: float = 1e-6,
-    log_interval: int | None = None,
-) -> np.ndarray:
-    """Optax ベースの JAX ネイティブ M 推定器。
-
-    ``m_estimate`` と同様に目的関数を最大化するが、Optax のオプティマイザを用いて
-    JIT 互換なループを構成する。 ``log_interval`` を設定すると ``jax.debug.print`` で
-    進捗を表示できる。
-    """
-    if learning_rate <= 0.0:
-        msg = "learning_rate must be positive."
-        raise ValueError(msg)
-    if max_iters <= 0:
-        msg = "max_iters must be positive."
-        raise ValueError(msg)
-    if tol < 0.0:
-        msg = "tol must be non-negative."
-        raise ValueError(msg)
-
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess)
-
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta0.dtype)
-    theta0 = _clip(theta0, bounds)
-
-    def objective(theta: Array1D) -> jnp.ndarray:
-        return jnp.asarray(objective_function(theta))
-
-    def loss(theta: Array1D) -> jnp.ndarray:
-        return -objective(theta)
-
-    optimizer = optax.sgd(learning_rate)
-
-    @jax.jit
-    def _run(theta_init: Array1D) -> tuple[Array1D, jnp.ndarray, jnp.ndarray]:
-        opt_state = optimizer.init(theta_init)
-        loss0, grad0 = jax.value_and_grad(loss)(theta_init)
-        grad_norm0 = jnp.linalg.norm(grad0)
-        iter0 = jnp.asarray(0, dtype=jnp.int32)
-
-        def cond_fn(
-            state: tuple[Array1D, optax.OptState, Array1D, jnp.ndarray, jnp.ndarray],
-        ) -> jnp.ndarray:
-            _, _, _, grad_norm_val, iter_val = state
-            continue_grad = grad_norm_val > tol
-            continue_iter = iter_val < max_iters
-            return jnp.logical_and(continue_grad, continue_iter)
-
-        def body_fn(
-            state: tuple[Array1D, optax.OptState, Array1D, jnp.ndarray, jnp.ndarray],
-        ) -> tuple[Array1D, optax.OptState, Array1D, jnp.ndarray, jnp.ndarray]:
-            theta_curr, opt_state_curr, grad_curr, grad_norm_curr, iter_val = state
-            updates, opt_state_next = optimizer.update(grad_curr, opt_state_curr, theta_curr)
-            theta_next = optax.apply_updates(theta_curr, updates)
-            theta_next = _clip(theta_next, bounds)
-            _loss_next, grad_next = jax.value_and_grad(loss)(theta_next)
-            grad_norm_next = jnp.linalg.norm(grad_next)
-            iter_next = iter_val + 1
-
-            if log_interval is not None and log_interval > 0:
-                log_every = jnp.asarray(log_interval, dtype=iter_next.dtype)
-                should_log = jnp.logical_and(
-                    log_every > 0, jnp.equal(jnp.mod(iter_next, log_every), 0)
-                )
-
-                def _log_fn(_: None) -> None:
-                    jax.debug.print(
-                        "[m_estimate_jax] iter={iter} grad_norm={grad_norm:.3e} theta={theta}",
-                        iter=iter_next,
-                        grad_norm=grad_norm_next,
-                        theta=theta_next,
-                    )
-
-                def _noop_fn(_: None) -> None:
-                    return None
-
-                jax.lax.cond(should_log, _log_fn, _noop_fn, operand=None)
-
-            return theta_next, opt_state_next, grad_next, grad_norm_next, iter_next
-
-        theta_final, opt_state_final, grad_final, grad_norm_final, iter_final = jax.lax.while_loop(
-            cond_fn,
-            body_fn,
-            (theta_init, opt_state, grad0, grad_norm0, iter0),
-        )
-        return theta_final, grad_final, grad_norm_final
-
-    theta_opt, _, _ = _run(theta0)
-    return np.asarray(theta_opt)
-
-
 __all__ = [
     "bayes_estimate",
-    "m_estimate",
-    "m_estimate_jax",
     "newton_solve",
     "one_step_estimate",
 ]

@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "blackjax>=1.2.5",
     "cloudpickle~=3.1",
     "jax~=0.8",
     "jaxlib~=0.8",
