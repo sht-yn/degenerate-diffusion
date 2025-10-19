@@ -561,35 +561,45 @@ class LoopEstimationAlgorithm:
         theta_bar_jnp = tuple(jnp.asarray(v) for v in theta_bar)
         if component == THETA_COMPONENT_1:
             evaluator_fn = (
-                self._likelihood.make_quasi_likelihood_l1_prime_evaluator(
-                    x_series, y_series, h, k_arg
-                )
+                self._likelihood.make_stateless_quasi_l1_prime_evaluator(k=k_arg)
                 if use_prime
-                else self._likelihood.make_quasi_likelihood_l1_evaluator(
-                    x_series, y_series, h, k_arg
-                )
+                else self._likelihood.make_stateless_quasi_l1_evaluator(k=k_arg)
             )
 
             def objective(theta_val: Array1D) -> jnp.ndarray:
-                return evaluator_fn(jnp.asarray(theta_val), *theta_bar_jnp)
+                return evaluator_fn(
+                    jnp.asarray(theta_val),
+                    *theta_bar_jnp,
+                    x_series,
+                    y_series,
+                    h,
+                )
 
             return objective
         if component == THETA_COMPONENT_2:
-            evaluator_fn = self._likelihood.make_quasi_likelihood_l2_evaluator(
-                x_series, y_series, h, k_arg
-            )
+            evaluator_fn = self._likelihood.make_stateless_quasi_l2_evaluator(k=k_arg)
 
             def objective(theta_val: Array1D) -> jnp.ndarray:
-                return evaluator_fn(jnp.asarray(theta_val), *theta_bar_jnp)
+                return evaluator_fn(
+                    jnp.asarray(theta_val),
+                    *theta_bar_jnp,
+                    x_series,
+                    y_series,
+                    h,
+                )
 
             return objective
         if component == THETA_COMPONENT_3:
-            evaluator_fn = self._likelihood.make_quasi_likelihood_l3_evaluator(
-                x_series, y_series, h, k_arg
-            )
+            evaluator_fn = self._likelihood.make_stateless_quasi_l3_evaluator(k=k_arg)
 
             def objective(theta_val: Array1D) -> jnp.ndarray:
-                return evaluator_fn(jnp.asarray(theta_val), *theta_bar_jnp)
+                return evaluator_fn(
+                    jnp.asarray(theta_val),
+                    *theta_bar_jnp,
+                    x_series,
+                    y_series,
+                    h,
+                )
 
             return objective
         msg = f"Unknown component index: {component}"

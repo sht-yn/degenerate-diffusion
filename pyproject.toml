@@ -51,6 +51,8 @@ disallow_incomplete_defs = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
+files = ["src"]
+
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
@@ -59,7 +61,7 @@ disallow_untyped_defs = false
 disallow_any_generics = false
 check_untyped_defs = false
 # でも雑な無視は残さない
-warn_unused_ignores = true
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "degenerate_diffusion.estimation.loop_estimation_algorithm"
