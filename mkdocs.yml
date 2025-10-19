@@ -1,0 +1,29 @@
+site_name: Degenerate Diffusion Documentation
+site_url: https://sht-yn.github.io/degenerate-diffusion/
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+plugins:
+  - search
+  - glightbox
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+nav:
+  - JAX Control Flow Loops (JA): jax_control_flow_loops_ja.md
+  - Likelihood Evaluator Guide: likelihood_evaluator_guide.md
+  - Optax Basics (JA): optax_basics_ja.md
+  - Parameter Estimator Usage: parameter_estimator_usage.md
+  - UV Workspace Setup: uv_workspace_setup.md

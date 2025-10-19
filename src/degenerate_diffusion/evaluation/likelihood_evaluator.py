@@ -386,17 +386,15 @@ class QuasiLikelihoodEvaluator:
         theta_1_bar: JaxArray,
         theta_2_bar: JaxArray,
         theta_3_bar: JaxArray,
-        h: float,
+        h: float | JaxArray,
         k_arg: int,
     ) -> JaxArray:
         r"""Compute the scaled \(\Delta x\) used by the quasi-likelihood.
 
         疑似尤度で利用する \(\Delta x\) をスケール済みで算出する。
         """
-        if h <= 0:
-            msg = "h must be positive in Dx_func"
-            raise ValueError(msg)
-        DX_SCALE = jnp.power(h, -0.5)
+        # Use JAX-friendly scaling; assume h > 0 in caller.
+        DX_SCALE = jnp.power(jnp.asarray(h, dtype=x_j.dtype), -0.5)
         D_x = DX_SCALE * (x_j - x_j_1)
         if k_arg >= 1:
             A_val = self.model.A_func(x_j_1, y_j_1, theta_2_val)
@@ -425,16 +423,15 @@ class QuasiLikelihoodEvaluator:
         theta_1_bar: JaxArray,
         theta_2_bar: JaxArray,
         theta_3_bar: JaxArray,
-        h: float,
+        h: float | JaxArray,
         k_arg: int,
     ) -> JaxArray:
         r"""Compute the scaled \(\Delta y\) used by the quasi-likelihood.
 
         疑似尤度で利用する \(\Delta y\) をスケール済みで算出する。
         """
-        if h <= 0:
-            return jnp.zeros_like(y_j, dtype=y_j.dtype)
-        DY_SCALE = jnp.power(h, -1.5)
+        # Use JAX-friendly scaling; assume h > 0 in caller.
+        DY_SCALE = jnp.power(jnp.asarray(h, dtype=y_j.dtype), -1.5)
         D_y = DY_SCALE * (y_j - y_j_1)
         if k_arg >= 1:
             H_val = self.model.H_func(x_j_1, y_j_1, theta_3_val)
@@ -946,6 +943,414 @@ class QuasiLikelihoodEvaluator:
 
         return cast("JittedLikelihood", jax.jit(evaluate_l3))
 
+    # ---- Stateless evaluators: do NOT close over x/y/h; pass them as arguments ----
+
+    def build_stateless_l1_prime(
+        self, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return l1' evaluator as a stateless JAX function.
+
+        Signature: (theta_1, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h) -> scalar
+        """
+        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
+        S_xx_funcs = tuple(self.S(l_s)[0].func for l_s in range(1, k))
+        invC_func = self.symbolics.inv_C.func
+        logDetC_func = self.symbolics.log_det_C.func
+        d_x = self.model.x.shape[0]
+
+        @jax.jit
+        def eval_l1p(
+            theta_1_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+            x_series: JaxArray,
+            y_series: JaxArray,
+            h: JaxArray,
+        ) -> JaxArray:
+            x_series = jnp.asarray(x_series)
+            y_series = jnp.asarray(y_series)
+            n = x_series.shape[0]
+            num_transitions = n - 1
+
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
+                x_j, x_j_1, y_j_1 = step_inputs
+                invC_val = invC_func(x_j_1, y_j_1, theta_1_val)
+                logDetC_val = logDetC_func(x_j_1, y_j_1, theta_1_val)
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k - 1,
+                )
+                sum_Sxx_val = jnp.zeros((d_x, d_x), dtype=invC_val.dtype)
+                for idx, Sxx_func in enumerate(S_xx_funcs, start=1):
+                    sum_Sxx_val += (h**idx) * Sxx_func(
+                        x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar
+                    )
+                term1_quad = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
+                term2_trace = jnp.einsum("ij,ji->", invC_val, sum_Sxx_val)
+                term3_logdet = -logDetC_val
+                step_ll = term1_quad + term2_trace + term3_logdet
+                step_ll = jnp.where(
+                    jnp.isfinite(step_ll),
+                    step_ll,
+                    jnp.array(jnp.nan, dtype=step_ll.dtype),
+                )
+                return total + step_ll, None
+
+            init = jnp.zeros(
+                (),
+                dtype=jnp.result_type(
+                    theta_1_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                ),
+            )
+            scan_inputs = (x_series[1:], x_series[:-1], y_series[:-1])
+            total_ll, _ = lax.scan(scan_body, init, scan_inputs)
+
+            def a_scale(n_int: int, hh: JaxArray, kk: int, i: int) -> JaxArray:
+                n_f = jnp.asarray(n_int, dtype=total_ll.dtype)
+                hh = jnp.asarray(hh, dtype=total_ll.dtype)
+                if i == 1:
+                    return jnp.power(n_f, -0.5) + jnp.power(hh, kk)
+                if i == 2:
+                    return jnp.power(n_f * hh, -0.5) + jnp.power(hh, kk)
+                return jnp.power(hh / n_f, 0.5) + jnp.power(hh, kk + 1)
+
+            return jnp.where(
+                num_transitions > 0,
+                total_ll / (2.0 * num_transitions) / (a_scale(num_transitions, h, k, 1) ** 2),
+                jnp.full_like(init, jnp.nan),
+            )
+
+        return eval_l1p
+
+    def build_stateless_l1(  # noqa: PLR0915
+        self, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return l1 evaluator as stateless function.
+
+        Signature: (theta_1, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h) -> scalar
+        """
+        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k))
+        L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 1))
+        S_funcs = tuple(
+            (self.S(l_s)[0].func, self.S(l_s)[1].func, self.S(l_s)[2].func, self.S(l_s)[3].func)
+            for l_s in range(1, k)
+        )
+        inv_S0_xx_func = self.symbolics.inv_S0_xx.func
+        inv_S0_xy_func = self.symbolics.inv_S0_xy.func
+        inv_S0_yx_func = self.symbolics.inv_S0_yx.func
+        inv_S0_yy_func = self.symbolics.inv_S0_yy.func
+        log_det_S0_func = self.symbolics.log_det_S0.func
+        d_x = self.model.x.shape[0]
+        d_y = self.model.y.shape[0]
+
+        @jax.jit
+        def eval_l1(
+            theta_1_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+            x_series: JaxArray,
+            y_series: JaxArray,
+            h: JaxArray,
+        ) -> JaxArray:
+            x_series = jnp.asarray(x_series)
+            y_series = jnp.asarray(y_series)
+            n = x_series.shape[0]
+            num_transitions = n - 1
+
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
+                x_j, y_j, x_j_1, y_j_1 = step_inputs
+                inv_S0_xx_val = inv_S0_xx_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_xy_val = inv_S0_xy_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_yx_val = inv_S0_yx_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                inv_S0_yy_val = inv_S0_yy_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+                log_det_S0_val = log_det_S0_func(x_j_1, y_j_1, theta_1_val, theta_3_bar)
+
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k - 1,
+                )
+                Dy_val = self.Dy_func(
+                    L0_y_funcs,
+                    y_j,
+                    y_j_1,
+                    x_j_1,
+                    theta_3_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k - 1,
+                )
+
+                sum_S_xx = jnp.zeros((d_x, d_x), dtype=inv_S0_xx_val.dtype)
+                sum_S_xy = jnp.zeros((d_x, d_y), dtype=inv_S0_xx_val.dtype)
+                sum_S_yx = jnp.zeros((d_y, d_x), dtype=inv_S0_xx_val.dtype)
+                sum_S_yy = jnp.zeros((d_y, d_y), dtype=inv_S0_xx_val.dtype)
+                for idx, s_funcs in enumerate(S_funcs, start=1):
+                    s_xx = s_funcs[0](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_xy = s_funcs[1](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_yx = s_funcs[2](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    s_yy = s_funcs[3](x_j_1, y_j_1, theta_1_bar, theta_2_bar, theta_3_bar)
+                    h_power = h**idx
+                    sum_S_xx += h_power * s_xx
+                    sum_S_xy += h_power * s_xy
+                    sum_S_yx += h_power * s_yx
+                    sum_S_yy += h_power * s_yy
+
+                q_xx = jnp.einsum("ij,i,j->", inv_S0_xx_val, Dx_val, Dx_val)
+                q_xy = jnp.einsum("ij,i,j->", inv_S0_xy_val, Dx_val, Dy_val)
+                q_yx = jnp.einsum("ij,i,j->", inv_S0_yx_val, Dy_val, Dx_val)
+                q_yy = jnp.einsum("ij,i,j->", inv_S0_yy_val, Dy_val, Dy_val)
+                quadratic_term = -(q_xx + q_xy + q_yx + q_yy)
+
+                tr_xx = jnp.einsum("ij,ij->", inv_S0_xx_val, sum_S_xx)
+                tr_xy = jnp.einsum("ij,ij->", inv_S0_xy_val, sum_S_xy)
+                tr_yx = jnp.einsum("ij,ij->", inv_S0_yx_val, sum_S_yx)
+                tr_yy = jnp.einsum("ij,ij->", inv_S0_yy_val, sum_S_yy)
+                trace_term = tr_xx + tr_xy + tr_yx + tr_yy
+
+                logdet_term = -log_det_S0_val
+                step_ll = quadratic_term + trace_term + logdet_term
+                step_ll = jnp.where(
+                    jnp.isfinite(step_ll),
+                    step_ll,
+                    jnp.array(jnp.nan, dtype=step_ll.dtype),
+                )
+                return total + step_ll, None
+
+            init = jnp.zeros(
+                (),
+                dtype=jnp.result_type(
+                    theta_1_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                ),
+            )
+            scan_inputs = (x_series[1:], y_series[1:], x_series[:-1], y_series[:-1])
+            total_ll, _ = lax.scan(scan_body, init, scan_inputs)
+
+            def a_scale(n_int: int, hh: JaxArray, kk: int, i: int) -> JaxArray:
+                n_f = jnp.asarray(n_int, dtype=total_ll.dtype)
+                hh = jnp.asarray(hh, dtype=total_ll.dtype)
+                if i == 1:
+                    return jnp.power(n_f, -0.5) + jnp.power(hh, kk)
+                if i == 2:
+                    return jnp.power(n_f * hh, -0.5) + jnp.power(hh, kk)
+                return jnp.power(hh / n_f, 0.5) + jnp.power(hh, kk + 1)
+
+            return jnp.where(
+                num_transitions > 0,
+                total_ll / (2.0 * num_transitions) / (a_scale(num_transitions, h, k, 1) ** 2),
+                jnp.full_like(init, jnp.nan),
+            )
+
+        return eval_l1
+
+    def build_stateless_l2(
+        self, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return l2 evaluator as stateless function.
+
+        Signature: (theta_2, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h) -> scalar
+        """
+        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
+        invC_func = self.symbolics.inv_C.func
+
+        @jax.jit
+        def eval_l2(
+            theta_2_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+            x_series: JaxArray,
+            y_series: JaxArray,
+            h: JaxArray,
+        ) -> JaxArray:
+            x_series = jnp.asarray(x_series)
+            y_series = jnp.asarray(y_series)
+            n = x_series.shape[0]
+            num_transitions = n - 1
+
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
+                x_j, x_j_1, y_j_1 = step_inputs
+                invC_val = invC_func(x_j_1, y_j_1, theta_1_bar)
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k,
+                )
+                term = -jnp.einsum("ij,i,j->", invC_val, Dx_val, Dx_val)
+                step_ll = jnp.where(
+                    jnp.isfinite(term),
+                    term,
+                    jnp.array(jnp.nan, dtype=term.dtype),
+                )
+                return total + step_ll, None
+
+            init = jnp.zeros(
+                (),
+                dtype=jnp.result_type(
+                    theta_2_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                ),
+            )
+            scan_inputs = (x_series[1:], x_series[:-1], y_series[:-1])
+            total_ll, _ = lax.scan(scan_body, init, scan_inputs)
+
+            def a_scale(n_int: int, hh: JaxArray, kk: int, i: int) -> JaxArray:
+                n_f = jnp.asarray(n_int, dtype=total_ll.dtype)
+                hh = jnp.asarray(hh, dtype=total_ll.dtype)
+                if i == 1:
+                    return jnp.power(n_f, -0.5) + jnp.power(hh, kk)
+                if i == 2:
+                    return jnp.power(n_f * hh, -0.5) + jnp.power(hh, kk)
+                return jnp.power(hh / n_f, 0.5) + jnp.power(hh, kk + 1)
+
+            return jnp.where(
+                (num_transitions > 0) & (h > 0),
+                total_ll / (2.0 * h * num_transitions) / (a_scale(num_transitions, h, k, 2) ** 2),
+                jnp.full_like(init, jnp.nan),
+            )
+
+        return eval_l2
+
+    def build_stateless_l3(
+        self, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return l3 evaluator as stateless function.
+
+        Signature: (theta_3, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h) -> scalar
+        """
+        L0_x_funcs = tuple(self.generator.L_0(self.model.x, m).func for m in range(k + 1))
+        L0_y_funcs = tuple(self.generator.L_0(self.model.y, m).func for m in range(k + 2))
+        invV_func = self.symbolics.inv_V.func
+        pHTinvV_func = self.symbolics.partial_x_H_transpose_inv_V.func
+
+        @jax.jit
+        def eval_l3(
+            theta_3_val: JaxArray,
+            theta_1_bar: JaxArray,
+            theta_2_bar: JaxArray,
+            theta_3_bar: JaxArray,
+            x_series: JaxArray,
+            y_series: JaxArray,
+            h: JaxArray,
+        ) -> JaxArray:
+            x_series = jnp.asarray(x_series)
+            y_series = jnp.asarray(y_series)
+            n = x_series.shape[0]
+            num_transitions = n - 1
+
+            def scan_body(
+                total: JaxArray,
+                step_inputs: tuple[JaxArray, JaxArray, JaxArray, JaxArray],
+            ) -> tuple[JaxArray, None]:
+                x_j, y_j, x_j_1, y_j_1 = step_inputs
+                invV_val = invV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
+                pHTinvV_val = pHTinvV_func(x_j_1, y_j_1, theta_1_bar, theta_3_bar)
+                Dx_val = self.Dx_func(
+                    L0_x_funcs,
+                    x_j,
+                    x_j_1,
+                    y_j_1,
+                    theta_2_bar,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k,
+                )
+                Dy_val = self.Dy_func(
+                    L0_y_funcs,
+                    y_j,
+                    y_j_1,
+                    x_j_1,
+                    theta_3_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                    float(h) if isinstance(h, (float, int)) else h,
+                    k,
+                )
+                term1 = -jnp.einsum("ij,i,j->", invV_val, Dy_val, Dy_val)
+                term2 = jnp.einsum("i,ik,k->", Dx_val, pHTinvV_val, Dy_val)
+                step_ll = term1 + term2
+                step_ll = jnp.where(
+                    jnp.isfinite(step_ll),
+                    step_ll,
+                    jnp.array(jnp.nan, dtype=step_ll.dtype),
+                )
+                return total + step_ll, None
+
+            init = jnp.zeros(
+                (),
+                dtype=jnp.result_type(
+                    theta_3_val,
+                    theta_1_bar,
+                    theta_2_bar,
+                    theta_3_bar,
+                ),
+            )
+            scan_inputs = (x_series[1:], y_series[1:], x_series[:-1], y_series[:-1])
+            total_ll, _ = lax.scan(scan_body, init, scan_inputs)
+
+            def a_scale(n_int: int, hh: JaxArray, kk: int, i: int) -> JaxArray:
+                n_f = jnp.asarray(n_int, dtype=total_ll.dtype)
+                hh = jnp.asarray(hh, dtype=total_ll.dtype)
+                if i == 1:
+                    return jnp.power(n_f, -0.5) + jnp.power(hh, kk)
+                if i == 2:
+                    return jnp.power(n_f * hh, -0.5) + jnp.power(hh, kk)
+                return jnp.power(hh / n_f, 0.5) + jnp.power(hh, kk + 1)
+
+            return jnp.where(
+                (num_transitions > 0) & (h != 0),
+                (6.0 * h * total_ll) / num_transitions / (a_scale(num_transitions, h, k, 3) ** 2),
+                jnp.full_like(init, jnp.nan),
+            )
+
+        return eval_l3
+
 
 class LikelihoodEvaluator:
     """Facade that pairs symbolic preparation with quasi-likelihood evaluation.
@@ -1094,3 +1499,44 @@ class LikelihoodEvaluator:
         パラメータ ``theta_3`` に特化した疑似尤度 :math:`l_3` を評価する関数を生成する。
         """
         return self.quasi.make_quasi_likelihood_l3_evaluator(x_series, y_series, h, k)
+
+    # Stateless wrappers
+    def make_stateless_quasi_l1_prime_evaluator(
+        self, *, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return stateless l1' evaluator factory.
+
+        Returns a callable taking
+        (theta_1, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h).
+        """
+        return self.quasi.build_stateless_l1_prime(k)
+
+    def make_stateless_quasi_l1_evaluator(
+        self, *, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return stateless l1 evaluator factory.
+
+        Returns a callable taking
+        (theta_1, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h).
+        """
+        return self.quasi.build_stateless_l1(k)
+
+    def make_stateless_quasi_l2_evaluator(
+        self, *, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return stateless l2 evaluator factory.
+
+        Returns a callable taking
+        (theta_2, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h).
+        """
+        return self.quasi.build_stateless_l2(k)
+
+    def make_stateless_quasi_l3_evaluator(
+        self, *, k: int
+    ) -> Callable[[JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray], JaxArray]:
+        """Return stateless l3 evaluator factory.
+
+        Returns a callable taking
+        (theta_3, theta_1_bar, theta_2_bar, theta_3_bar, x_series, y_series, h).
+        """
+        return self.quasi.build_stateless_l3(k)

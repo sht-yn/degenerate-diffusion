@@ -20,6 +20,7 @@ import optax
 # Public API
 __all__ = [
     "build_bayes_transition",
+    "build_bayes_transition_with_aux",
     "build_newton_ascent_solver",
     "build_one_step_ascent",
 ]
@@ -319,6 +320,55 @@ def build_bayes_transition(
                 nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
             except TypeError:
                 # Positional fallback for even older versions
+                nuts = blackjax.nuts(logprob, step_size, inverse_mass_matrix=inv_mass)
+            state = nuts.init(theta)
+            try:
+                new_state, _info = nuts.step(subkey, state, max_num_doublings=max_num_doublings)
+            except TypeError:
+                new_state, _info = nuts.step(subkey, state)
+        return new_state.position, key
+
+    return jax.jit(step)
+
+
+def build_bayes_transition_with_aux(
+    logprob_fn: Callable[[JaxArray, Aux], JaxArray],
+    *,
+    step_size: float = 1e-1,
+    max_num_doublings: int = 8,
+    inverse_mass_matrix: JaxArray | None = None,
+) -> Callable[[JaxArray, JaxArray, Aux], tuple[JaxArray, JaxArray]]:
+    """Build a NUTS transition that accepts auxiliary data: (theta, key, aux) -> (theta', key').
+
+    English: For cases where the log-prob depends on data or parameters (aux), keep it stateless by
+    passing aux at call-time.
+    Japanese: 観測データなどの aux に依存する対数確率で、呼び出し時に aux を渡すステートレス版。
+    """
+
+    def step(theta: JaxArray, key: JaxArray, aux: Aux) -> tuple[JaxArray, JaxArray]:
+        theta = jnp.asarray(theta)
+        inv_mass = inverse_mass_matrix
+        inv_mass = jnp.ones_like(theta) if inv_mass is None else inv_mass
+
+        def logprob(th: JaxArray) -> JaxArray:
+            return jnp.asarray(logprob_fn(th, aux))
+
+        key, subkey = jax.random.split(key)
+
+        try:
+            nuts = blackjax.nuts(logprob)
+            state = nuts.init(theta)
+            new_state, _info = nuts.step(
+                subkey,
+                state,
+                step_size=step_size,
+                inverse_mass_matrix=inv_mass,
+                max_num_doublings=max_num_doublings,
+            )
+        except TypeError:
+            try:
+                nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
+            except TypeError:
                 nuts = blackjax.nuts(logprob, step_size, inverse_mass_matrix=inv_mass)
             state = nuts.init(theta)
             try:

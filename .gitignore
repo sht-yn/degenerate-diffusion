@@ -18,6 +18,7 @@ dist/
 *.egg-info/
 .eggs/
 pip-wheel-metadata/
+site/
 
 # Jupyter
 .ipynb_checkpoints/
