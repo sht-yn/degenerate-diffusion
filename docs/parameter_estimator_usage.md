@@ -1,93 +1,72 @@
-# パラメータ推定ユーティリティの使い方
+# 推定ユーティリティの利用ガイド（現行API）
 
-`degenerate_diffusion/estimation/parameter_estimator.py` では、勾配ベースの推定器を複数提供しています。ここでは `m_estimate` と `m_estimate_jax` の概要と利用方法をまとめます。
+このドキュメントは、現行の JAX ネイティブ推定 API に対応しています。
 
-## 共通の前提
-
-- 目的関数 `objective_function(theta)` は JAX の `jnp.ndarray` を受け取り、実数スカラーを返す必要があります。
-- `search_bounds` は各パラメータに対する `(low, high)` のタプル列で、`None` を指定すると非制限境界になります。
-- `initial_guess` は推定を開始する初期値ベクトルです。境界外の成分は自動的にクリップされます。
+含まれる機能（抜粋）
+- ニュートン上昇の1ステップ/収束ソルバ（境界投影つき）
+- BlackJAX NUTS による事後更新の1ステップ（unary logprob）
 
 ```python
-from degenerate_diffusion.estimation.parameter_estimator import (
-    m_estimate,
-    m_estimate_jax,
+from degenerate_diffusion.estimation.parameter_estimator_new import (
+    build_one_step_ascent,
+    build_newton_ascent_solver,
+    build_bayes_transition,
 )
 ```
 
-## `m_estimate`
+## M推定（最大化）
 
-NumPy ベースの簡易勾配法です。小規模問題や試行錯誤に向いています。
-
-```python
-theta_hat = m_estimate(
-    objective_function=my_objective,
-    search_bounds=[(0.0, 1.0), (None, None)],
-    initial_guess=[0.2, 0.0],
-    learning_rate=1e-3,
-    max_iters=2_000,
-    tol=1e-6,
-    log_interval=100,
-)
-```
-
-- `learning_rate` は固定ステップ幅の勾配上昇です。
-- `log_interval` を設定すると標準出力に進捗が表示されます。
-- 返り値は `numpy.ndarray` です。
-
-## `m_estimate_jax`
-
-JAXopt の `ProjectedGradient` による推定で、JIT コンパイルや大規模計算と相性が良いアプローチです。JAXopt がインストールされている必要があります。
+目的関数: `objective(theta, aux) -> scalar`（最大化）。
 
 ```python
-theta_hat = m_estimate_jax(
-    objective_function=my_objective,
-    search_bounds=[(0.0, 1.0), (None, None)],
-    initial_guess=[0.2, 0.0],
-    learning_rate=1e-2,
-    max_iters=1_000,
-    tol=1e-7,
-    log_interval=50,
-)
+import jax
+import jax.numpy as jnp
+
+objective = lambda th, aux: -0.5 * jnp.sum((th - aux["mu"]) ** 2)
+bounds = [(-jnp.inf, jnp.inf)] * 3
+
+step = build_one_step_ascent(objective, bounds, damping=0.5)
+solve = build_newton_ascent_solver(objective, bounds, tol=1e-8, damping=1.0)
+
+theta0 = jnp.zeros(3)
+aux = {"mu": jnp.ones(3)}
+
+theta1 = step(theta0, aux)
+thetahat = solve(theta0, aux)
 ```
 
-- `learning_rate` (`stepsize`) は `ProjectedGradient` のステップ幅です。
-- `log_interval` を設定すると `jax.debug.print` 経由でホストにログが出力され、JIT 後も利用できます。
-- 返り値は `numpy.ndarray`。推定後に境界内へ再クリップされます。
+ポイント
+- ヘッセ安定化は最大化のため `-eps * I` を使用
+- AdamW フォールバックは最大化なので `-grad` を最適化
+- 境界は `clip` により射影
 
-## よくある注意点
+## B推定（NUTS 一歩）
 
-- 目的関数の値が最大化対象であることを確認してください。最小化の場合は符号を反転させてください。
-- 勾配計算が不安定な場合は、`search_bounds` の設定や初期値、ステップ幅を調整すると収束しやすくなります。
-- JAXopt 版を使う際は `pip install jaxopt` などで事前にライブラリを導入してください。
-
-## `bayes_estimate`
-
-確率的なパラメータ推定を行うラッパで、NumPyro の NUTS + MCMC を内部で実行します。使用例は次の通りです。
+BlackJAX NUTS の1ステップ遷移をビルダーで構築します。logprob は **unary**（`theta` のみ）です。aux を使う場合は、事前に閉じてから渡します。
 
 ```python
-from degenerate_diffusion.estimation.parameter_estimator import bayes_estimate
+import jax
+import jax.numpy as jnp
 
-theta_posterior_mean = bayes_estimate(
-    objective_function=my_log_likelihood,  # theta -> log p(data | theta)
-    search_bounds=[(0.0, 1.0), (None, None)],
-    initial_guess=[0.4, 0.1],
-    prior_log_pdf=None,  # 追加の対数事前項があれば callable を渡す
-    num_warmup=1_000,
-    num_samples=2_000,
-    num_chains=2,
-    rng_seed=2024,
-)
+def logprob(theta: jax.Array, aux) -> jax.Array:
+    d = theta - aux["mean"]
+    return -0.5 * (d @ (aux["inv_cov"] @ d))
+
+aux_fixed = {"mean": jnp.array([1.0]), "inv_cov": jnp.eye(1)}
+closed = lambda th: logprob(th, aux_fixed)
+
+step = build_bayes_transition(closed, step_size=0.2, max_num_doublings=6)
+
+key = jax.random.PRNGKey(0)
+th0 = jnp.array([0.0])
+th1, key = step(th0, key)
 ```
 
-### `model()` クロージャが行っていること
+注意
+- `num_integration_steps` は使わず、NUTS の木の深さは `max_num_doublings` を指定
+- `inverse_mass_matrix` を省略すると `ones_like(theta)` がデフォルト
+- 内部で API 差分に対応（古い BlackJAX でも動作）
 
-`bayes_estimate` 内部では引数を束縛した `model()` を定義し、NumPyro のサンプリングに渡しています。主要な処理は以下の通りです。
+## 交互推定（M/B）
 
-1. **事前分布の自動生成** — `search_bounds` を `_normalize_bounds` で整形し、各パラメータの `(low, high)` から `_prior_from_bounds` が適切な事前分布を構築します。有限区間は一様、片側無限は指数分布のアフィン変換、両側無限は広い正規分布が選ばれます。
-2. **パラメータのサンプリング** — `numpyro.sample(f"theta_{i}", prior)` を順に呼び、パラメータベクトル `theta` を得ます。
-3. **目的関数のログ尤度化** — ユーザー提供の `objective_function(theta)` を評価し、その出力を `numpyro.factor("log_likelihood", ...)` で joint log-density に足し込みます。ここでは自前で評価した対数尤度（未正規化でも可）を追加するスタイルです。
-4. **任意の追加事前項** — `prior_log_pdf` が渡されていれば `numpyro.factor("user_prior", ...)` で同様に加算します。
-5. **サンプルの保持** — `numpyro.deterministic("theta", theta)` により、サンプル辞書から `samples["theta"]` としてパラメータを取り出せるようにしています。
-
-NUTS と MCMC の組み合わせは `kernel = infer.NUTS(model)`、`mcmc = infer.MCMC(kernel, ...)` の順で構築され、`mcmc.run(rng_key)` により事後サンプルが生成されます。返り値は事後平均 `np.ndarray` ですが、必要に応じて `mcmc.get_samples()` から生のサンプルを再利用できます。
+`lax.scan`・`lax.fori_loop` で M/B を交互に呼び分けられます。スケジュールやブロック更新の詳細は設計ドキュメントを参照してください。
