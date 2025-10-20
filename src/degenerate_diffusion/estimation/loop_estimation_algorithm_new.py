@@ -312,42 +312,11 @@ def build_seed_runner(  # noqa: PLR0915
     k0 = int(max(plan))
 
     # Prebuild stateless evaluators for each k in 1..k0 and wrap for lax.switch
-    l1p_fns = tuple(
+    branches_l1p = tuple(
         evaluator.make_stateless_quasi_l1_prime_evaluator(k=k) for k in range(1, k0 + 1)
     )
-    l2_fns = tuple(evaluator.make_stateless_quasi_l2_evaluator(k=k) for k in range(1, k0 + 1))
-    l3_fns = tuple(evaluator.make_stateless_quasi_l3_evaluator(k=k) for k in range(1, k0 + 1))
-
-    def _wrap_eval(
-        f: Callable[
-            [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-            JaxArray,
-        ],
-    ) -> Callable[
-        [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-        JaxArray,
-    ]:
-        def wrapped(
-            th: JaxArray,
-            t1b: JaxArray,
-            t2b: JaxArray,
-            t3b: JaxArray,
-            xs: JaxArray,
-            ys: JaxArray,
-            hh: JaxArray,
-            *,
-            _f: Callable[
-                [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-                JaxArray,
-            ] = f,
-        ) -> JaxArray:
-            return _f(th, t1b, t2b, t3b, xs, ys, hh)
-
-        return wrapped
-
-    branches_l1p = tuple(_wrap_eval(f) for f in l1p_fns)
-    branches_l2 = tuple(_wrap_eval(f) for f in l2_fns)
-    branches_l3 = tuple(_wrap_eval(f) for f in l3_fns)
+    branches_l2 = tuple(evaluator.make_stateless_quasi_l2_evaluator(k=k) for k in range(1, k0 + 1))
+    branches_l3 = tuple(evaluator.make_stateless_quasi_l3_evaluator(k=k) for k in range(1, k0 + 1))
 
     # Encode plan kinds as arrays for JAX-friendly selection
     kind_code = {"M": 0, "B": 1, "S": 2}
