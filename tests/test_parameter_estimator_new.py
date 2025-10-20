@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import pytest
 
 from degenerate_diffusion.estimation.parameter_estimator_new import (
-    build_bayes_transition,
+    build_b,
     build_newton_ascent_solver,
     build_one_step_ascent,
 )
@@ -99,37 +99,32 @@ def test_bounds_clipping_projects_into_box() -> None:
     pytest.importorskip("blackjax", reason="blackjax not installed") is None,
     reason="blackjax missing",
 )
-def test_bayes_transition_scan_reproducible_and_mean_moves() -> None:
+def test_bayes_sampler_reproducible_and_mean_moves() -> None:
     # 1次元の正規 N(1.0, 1.0)
     mean = jnp.array([1.0])
     cov = jnp.eye(1)
     logprob = _gaussian_logprob_closed(mean, cov)
 
-    step = build_bayes_transition(
-        logprob, step_size=0.2, max_num_doublings=6, inverse_mass_matrix=None
+    # aux を使わない場合でも、aux 版 API に合わせて引数を受ける関数にする
+    def logprob_with_aux(theta: jax.Array, _aux_unused: object) -> jax.Array:
+        return logprob(theta)
+
+    sampler = build_b(
+        logprob_with_aux,
+        step_size=0.2,
+        inverse_mass_matrix=None,
+        num_warmup=300,
+        num_samples=900,
+        thin=1,
     )
 
     key = jax.random.PRNGKey(0)
     theta0 = jnp.array([0.0])
 
-    def run_chain(key_in: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
-        def body(
-            carry: tuple[jax.Array, jax.Array], _unused: None
-        ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
-            th, k = carry
-            th_next, k_next = step(th, k)
-            return (th_next, k_next), th_next
+    # 同じキー・初期値・aux(None)なら再現性(同一結果)
+    m1 = sampler(theta0, key, None)
+    m2 = sampler(theta0, key, None)
+    assert jnp.allclose(m1, m2)
 
-        (th_fin, k_fin), samples = jax.lax.scan(body, (theta0, key_in), xs=None, length=1200)
-        burnin = 300
-        return samples[burnin:], th_fin, k_fin
-
-    samples1, _, _ = run_chain(key)
-    samples2, _, _ = run_chain(key)
-
-    # Same key should yield identical chains.
-    assert jnp.allclose(samples1, samples2)
-
-    # Posterior mean approaches the target mean (tolerant threshold).
-    m1 = jnp.mean(samples1, axis=0)
+    # 事後平均が真の平均に近づいているかを確認
     assert jnp.all(jnp.abs(m1 - mean) < 0.35)

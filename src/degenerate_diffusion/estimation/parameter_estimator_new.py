@@ -19,10 +19,11 @@ import optax
 
 # Public API
 __all__ = [
-    "build_bayes_transition",
-    "build_bayes_transition_with_aux",
+    "build_b",
+    "build_m",
     "build_newton_ascent_solver",
     "build_one_step_ascent",
+    "build_s",
 ]
 
 
@@ -31,7 +32,7 @@ JaxArray = jax.Array
 Bounds = Sequence[tuple[float | None, float | None]]
 Aux = Any  # PyTree expected; numeric leaves only
 ObjectiveFn = Callable[[JaxArray, Aux], JaxArray]  # maximize (scalar)
-LogProbFn = Callable[[JaxArray], JaxArray]
+# Removed closed-over logprob transition API; only aux-based sampler is public
 
 
 PAIR_LENGTH = 2
@@ -277,104 +278,81 @@ def build_newton_ascent_solver(
     )
 
 
-def build_bayes_transition(
-    logprob_fn: LogProbFn,
-    *,
-    step_size: float = 1e-1,
-    max_num_doublings: int = 8,
-    inverse_mass_matrix: JaxArray | None = None,
-) -> Callable[[JaxArray, JaxArray], tuple[JaxArray, JaxArray]]:
-    """Build a NUTS transition for a closed-over logprob: (theta, key) -> (theta', key').
-
-    Use this when ``logprob_fn`` is already closed over any auxiliary data. The returned
-    step function re-initializes the NUTS state from ``theta`` at each call and performs
-    a single NUTS transition.
-    """
-
-    def step(theta: JaxArray, key: JaxArray) -> tuple[JaxArray, JaxArray]:
-        theta = jnp.asarray(theta)
-        inv_mass = inverse_mass_matrix
-        # Provide a sane default metric if None is given (compat with older BlackJAX).
-        inv_mass = jnp.ones_like(theta) if inv_mass is None else inv_mass
-
-        def logprob(th: JaxArray) -> JaxArray:
-            return jnp.asarray(logprob_fn(th))
-
-        key, subkey = jax.random.split(key)
-
-        # BlackJAX API compatibility: try new-style (pass step params to step),
-        # fall back to old-style (pass to constructor; step without step_size).
-        try:
-            nuts = blackjax.nuts(logprob)
-            state = nuts.init(theta)
-            new_state, _info = nuts.step(
-                subkey,
-                state,
-                step_size=step_size,
-                inverse_mass_matrix=inv_mass,
-                max_num_doublings=max_num_doublings,
-            )
-        except TypeError:
-            # Older API: provide step_size/inv_mass at construction
-            try:
-                nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
-            except TypeError:
-                # Positional fallback for even older versions
-                nuts = blackjax.nuts(logprob, step_size, inverse_mass_matrix=inv_mass)
-            state = nuts.init(theta)
-            try:
-                new_state, _info = nuts.step(subkey, state, max_num_doublings=max_num_doublings)
-            except TypeError:
-                new_state, _info = nuts.step(subkey, state)
-        return new_state.position, key
-
-    return jax.jit(step)
+# (removed) build_bayes_transition: use aux-based internals only; inline transition in sampler
 
 
-def build_bayes_transition_with_aux(
+def build_bayes_sampler_with_aux(
     logprob_fn: Callable[[JaxArray, Aux], JaxArray],
     *,
     step_size: float = 1e-1,
-    max_num_doublings: int = 8,
     inverse_mass_matrix: JaxArray | None = None,
-) -> Callable[[JaxArray, JaxArray, Aux], tuple[JaxArray, JaxArray]]:
-    """Build a NUTS transition that accepts auxiliary data: (theta, key, aux) -> (theta', key').
+    num_warmup: int = 500,
+    num_samples: int = 1000,
+    thin: int = 1,
+) -> Callable[[JaxArray, JaxArray, Aux], JaxArray]:
+    """Build a NUTS sampler that returns the mean of posterior draws.
 
-    English: For cases where the log-prob depends on data or parameters (aux), keep it stateless by
-    passing aux at call-time.
-    Japanese: 観測データなどの aux に依存する対数確率で、呼び出し時に aux を渡すステートレス版。
+    (theta0, key, aux) -> theta_mean
+    - Assumes the new BlackJAX API: pass step_size and inverse_mass_matrix when
+      constructing the kernel; call nuts.step(key, state) without extra kwargs.
+      Optional thinning via `thin`.
     """
+    num_warmup_i = int(num_warmup)
+    num_samples_i = int(num_samples)
+    thin_i = int(max(thin, 1))
 
-    def step(theta: JaxArray, key: JaxArray, aux: Aux) -> tuple[JaxArray, JaxArray]:
-        theta = jnp.asarray(theta)
-        inv_mass = inverse_mass_matrix
-        inv_mass = jnp.ones_like(theta) if inv_mass is None else inv_mass
+    def run(theta0: JaxArray, key: JaxArray, aux: Aux) -> JaxArray:
+        theta0 = jnp.asarray(theta0)
 
         def logprob(th: JaxArray) -> JaxArray:
             return jnp.asarray(logprob_fn(th, aux))
 
-        key, subkey = jax.random.split(key)
+        inv_mass = jnp.ones_like(theta0) if inverse_mass_matrix is None else inverse_mass_matrix
 
-        try:
-            nuts = blackjax.nuts(logprob)
-            state = nuts.init(theta)
-            new_state, _info = nuts.step(
-                subkey,
-                state,
-                step_size=step_size,
-                inverse_mass_matrix=inv_mass,
-                max_num_doublings=max_num_doublings,
-            )
-        except TypeError:
-            try:
-                nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
-            except TypeError:
-                nuts = blackjax.nuts(logprob, step_size, inverse_mass_matrix=inv_mass)
-            state = nuts.init(theta)
-            try:
-                new_state, _info = nuts.step(subkey, state, max_num_doublings=max_num_doublings)
-            except TypeError:
-                new_state, _info = nuts.step(subkey, state)
-        return new_state.position, key
+        # BlackJAX >= 1.0 API only: pass step_size/metric at construction
+        nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
+        state0 = nuts.init(theta0)
 
-    return jax.jit(step)
+        def one_step(
+            state: tuple[object, JaxArray], _i: JaxArray
+        ) -> tuple[tuple[object, JaxArray], JaxArray]:
+            st, k_local = state
+            k_local, k_use = jax.random.split(k_local)
+            st_new, _info = nuts.step(k_use, st)
+            return (st_new, k_local), st_new.position
+
+        # Warmup
+        (state_warm_end, key_after), _ = jax.lax.scan(
+            one_step, (state0, key), jnp.arange(num_warmup_i)
+        )
+
+        # Sampling with optional thinning
+        def sample_body(
+            carry: tuple[object, JaxArray], _i: JaxArray
+        ) -> tuple[tuple[object, JaxArray], JaxArray]:
+            st, k_local = carry
+
+            def do_thin(_j: JaxArray, c: tuple[object, JaxArray]) -> tuple[object, JaxArray]:
+                st_cur, k_cur = c
+                k_cur, k_use = jax.random.split(k_cur)
+                st_new, _info = nuts.step(k_use, st_cur)
+                return st_new, k_cur
+
+            st_thin, k_thin = jax.lax.fori_loop(0, thin_i - 1, do_thin, (st, k_local))
+            (st_new, k_new), sample = one_step((st_thin, k_thin), jnp.asarray(0))
+            return (st_new, k_new), sample
+
+        (_, _), samples = jax.lax.scan(
+            sample_body, (state_warm_end, key_after), jnp.arange(num_samples_i)
+        )
+        return jnp.mean(samples, axis=0)
+
+    return jax.jit(run)
+
+
+# Friendly aliases to align names with estimator kinds (M/B/S).
+# Prefer build_b (aux sampler, returns mean). Aux-based transition is internal-only.
+build_m = build_newton_ascent_solver
+build_s = build_one_step_ascent
+build_b = build_bayes_sampler_with_aux
+# (removed) build_b_step, build_b_closed
