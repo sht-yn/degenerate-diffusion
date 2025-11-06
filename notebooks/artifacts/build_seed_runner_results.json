@@ -1,0 +1,13 @@
+[
+  {
+    "seed":0.0,
+    "theta1_stage0":0.2973599733,
+    "theta1_final":0.5,
+    "theta2_stage0_0":1.5218367339,
+    "theta2_stage0_1":0.7735685639,
+    "theta3_final_0":0.1969990009,
+    "theta3_final_1":0.0970036363,
+    "theta1_stage0_err":-0.0026400267,
+    "theta1_final_err":0.2
+  }
+]

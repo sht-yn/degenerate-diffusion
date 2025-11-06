@@ -9,12 +9,17 @@ from __future__ import annotations
 # isort: skip_file
 
 from collections.abc import Callable, Sequence
-from typing import Any, cast
+from typing import Any, TYPE_CHECKING, cast
 
 import blackjax
 import jax
 import jax.numpy as jnp
 import optax
+
+if TYPE_CHECKING:  # pragma: no cover - type-only import
+    from blackjax.base import SamplingState
+else:  # pragma: no cover - runtime fallback
+    SamplingState = Any
 
 
 # Public API
@@ -316,9 +321,10 @@ def build_b(
     *,
     step_size: float = 1e-1,
     inverse_mass_matrix: JaxArray | None = None,
-    num_warmup: int = 500,
-    num_samples: int = 2000,
+    num_warmup: int = 1000,
+    num_samples: int = 3000,
     thin: int = 1,
+    target_acceptance_rate: float = 0.75,
 ) -> Callable[[JaxArray, JaxArray, Aux], JaxArray]:
     """Build a NUTS sampler that returns the mean of posterior draws.
 
@@ -337,43 +343,54 @@ def build_b(
         def logprob(th: JaxArray) -> JaxArray:
             return jnp.asarray(logprob_fn(th, aux))
 
-        inv_mass = jnp.ones_like(theta0) if inverse_mass_matrix is None else inverse_mass_matrix
-
-        # BlackJAX >= 1.0 API only: pass step_size/metric at construction
-        nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=inv_mass)
-        state0 = nuts.init(theta0)
-
-        def one_step(
-            state: tuple[object, JaxArray], _i: JaxArray
-        ) -> tuple[tuple[object, JaxArray], JaxArray]:
-            st, k_local = state
-            k_local, k_use = jax.random.split(k_local)
+        def _thin_transition(
+            carry: tuple[SamplingState, JaxArray],
+            _i: JaxArray,
+        ) -> tuple[tuple[SamplingState, JaxArray], None]:
+            st, k_cur = carry
+            k_cur, k_use = jax.random.split(k_cur)
             st_new, _info = nuts.step(k_use, st)
-            return (st_new, k_local), st_new.position
+            return (st_new, k_cur), None
 
-        # Warmup
-        (state_warm_end, key_after), _ = jax.lax.scan(
-            one_step, (state0, key), jnp.arange(num_warmup_i)
-        )
+        def _sample_transition(
+            carry: tuple[SamplingState, JaxArray],
+            _i: JaxArray,
+        ) -> tuple[tuple[SamplingState, JaxArray], JaxArray]:
+            st, k_cur = carry
+            (st_new, k_after), _ = jax.lax.scan(
+                _thin_transition,
+                (st, k_cur),
+                jnp.arange(thin_i),
+            )
+            return (st_new, k_after), st_new.position
 
-        # Sampling with optional thinning
-        def sample_body(
-            carry: tuple[object, JaxArray], _i: JaxArray
-        ) -> tuple[tuple[object, JaxArray], JaxArray]:
-            st, k_local = carry
+        has_user_metric = inverse_mass_matrix is not None
+        metric_init = jnp.ones_like(theta0) if inverse_mass_matrix is None else inverse_mass_matrix
 
-            def do_thin(_j: JaxArray, c: tuple[object, JaxArray]) -> tuple[object, JaxArray]:
-                st_cur, k_cur = c
-                k_cur, k_use = jax.random.split(k_cur)
-                st_new, _info = nuts.step(k_use, st_cur)
-                return st_new, k_cur
-
-            st_thin, k_thin = jax.lax.fori_loop(0, thin_i - 1, do_thin, (st, k_local))
-            (st_new, k_new), sample = one_step((st_thin, k_thin), jnp.asarray(0))
-            return (st_new, k_new), sample
+        if num_warmup_i > 0 and not has_user_metric:
+            warmup_algo = blackjax.window_adaptation(
+                blackjax.nuts,
+                logprob,
+                initial_step_size=step_size,
+                target_acceptance_rate=target_acceptance_rate,
+            )
+            key_warmup, key_samples = jax.random.split(key)
+            warmup_result, _adapt_info = warmup_algo.run(key_warmup, theta0, num_warmup_i)
+            tuned_params = warmup_result.parameters
+            tuned_step = tuned_params["step_size"]
+            tuned_metric = tuned_params["inverse_mass_matrix"]
+            nuts = blackjax.nuts(logprob, step_size=tuned_step, inverse_mass_matrix=tuned_metric)
+            state_init = warmup_result.state
+            key_use = key_samples
+        else:
+            nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=metric_init)
+            state_init = nuts.init(theta0)
+            key_use = key
 
         (_, _), samples = jax.lax.scan(
-            sample_body, (state_warm_end, key_after), jnp.arange(num_samples_i)
+            _sample_transition,
+            (state_init, key_use),
+            jnp.arange(num_samples_i),
         )
         return jnp.mean(samples, axis=0)
 

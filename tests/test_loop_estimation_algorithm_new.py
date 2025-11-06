@@ -45,10 +45,25 @@ def test_build_seed_runner_runs_and_returns_shapes() -> None:
     )
 
     theta0 = tuple(jnp.asarray(t) for t in true_theta)
-    stage0_last, final_last = runner(0, theta0)
+    outputs = runner(0, theta0)
 
-    # Check shapes are consistent
-    for a, b in zip(stage0_last, true_theta, strict=True):
-        assert a.shape == jnp.asarray(b).shape
-    for a, b in zip(final_last, true_theta, strict=True):
-        assert a.shape == jnp.asarray(b).shape
+    assert len(outputs) == 4
+    theta1_stage0_seq, theta1_final_seq, theta2_stage0_seq, theta3_final_seq = outputs
+
+    # Number of iterations equals max(plan) - 1 because k starts from 1
+    expected_steps = max(plan) - 1
+
+    expected_theta1_shape = (expected_steps, *jnp.asarray(true_theta[0]).shape)
+    expected_theta2_shape = (expected_steps, *jnp.asarray(true_theta[1]).shape)
+    expected_theta3_shape = (expected_steps, *jnp.asarray(true_theta[2]).shape)
+
+    assert theta1_stage0_seq.shape == expected_theta1_shape
+    assert theta1_final_seq.shape == expected_theta1_shape
+    assert theta2_stage0_seq.shape == expected_theta2_shape
+    assert theta3_final_seq.shape == expected_theta3_shape
+
+    # Ensure the last step produces finite estimates
+    assert jnp.isfinite(theta1_stage0_seq[-1]).all()
+    assert jnp.isfinite(theta1_final_seq[-1]).all()
+    assert jnp.isfinite(theta2_stage0_seq[-1]).all()
+    assert jnp.isfinite(theta3_final_seq[-1]).all()
