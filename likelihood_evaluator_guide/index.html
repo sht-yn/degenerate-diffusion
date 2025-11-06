@@ -1,0 +1,759 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://sht-yn.github.io/degenerate-diffusion/likelihood_evaluator_guide/">
+      
+      
+        <link rel="prev" href="../jax_control_flow_loops_ja/">
+      
+      
+        <link rel="next" href="../optax_basics_ja/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Likelihood Evaluator Guide - Degenerate Diffusion Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#likelihoodevaluator" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-header__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Degenerate Diffusion Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Likelihood Evaluator Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-nav__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    Degenerate Diffusion Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jax_control_flow_loops_ja/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    JAX Control Flow Loops (JA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Likelihood Evaluator Guide
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Likelihood Evaluator Guide
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      全体構成
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="全体構成">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      補助クラス
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      使い方の流れ
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sympy" class="md-nav__link">
+    <span class="md-ellipsis">
+      SymPy による記号式の簡約と高速化
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluator" class="md-nav__link">
+    <span class="md-ellipsis">
+      各 evaluator の依存関係
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#l-l_0" class="md-nav__link">
+    <span class="md-ellipsis">
+      L / L_0 の利用
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fnmodelipynb" class="md-nav__link">
+    <span class="md-ellipsis">
+      例: FNmodel.ipynb の抜粋
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      発生しうる例外
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      旧バージョンとの違い
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      設計メモ
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      トラブルシューティング
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      参考情報
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optax_basics_ja/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Optax Basics (JA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameter_estimator_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Parameter Estimator Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uv_workspace_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UV Workspace Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../blackjax_nuts_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    BlackJax
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="likelihoodevaluator">LikelihoodEvaluator 利用ガイド<a class="headerlink" href="#likelihoodevaluator" title="Permanent link">¶</a></h1>
+<p>このドキュメントでは、<code>degenerate_diffusion</code> パッケージに含まれる <code>LikelihoodEvaluator</code> と関連コンポーネントの構造、利用手順、注意点をまとめます。2024 年リファクタ後の新しい設計に基づいています。</p>
+<h2 id="_1">全体構成<a class="headerlink" href="#_1" title="Permanent link">¶</a></h2>
+<p><code>LikelihoodEvaluator</code> は以下 3 つのコンポーネントを束ねるファサードです。</p>
+<ul>
+<li><code>SymbolicLikelihoodPreparer</code></li>
+<li>SymPy を使って行列 <code>C</code>, <code>V</code>, その逆行列や行列式などを導出し、JAX で実行可能な関数へ <code>lambdify</code> します。</li>
+<li>計算結果は <code>SymbolicPrecomputation</code> データクラス（後述）に格納されます。</li>
+<li><code>InfinitesimalGenerator</code></li>
+<li>無限小生成作用素 <span class="arithmatex">\(L\)</span> とその正規化 <span class="arithmatex">\(L_0\)</span> を扱います。</li>
+<li>SymPy の式を再利用するためのキャッシュを持ち、<code>L</code>, <code>L_0</code>, <code>L_0_func</code> を外部に提供します。</li>
+<li><code>QuasiLikelihoodEvaluator</code></li>
+<li>JAX 上で疑似尤度を計算する各種ファクトリ (<code>make_quasi_likelihood_l*_evaluator</code>) を提供します。</li>
+<li>各ファクトリの戻り値は JAX の <code>jit</code> 済み関数なので、生成後すぐ高速に評価／自動微分へ渡せます。</li>
+<li><code>S(k)</code> を呼び出すと、各テンソル成分の記号式と対応する JAX 関数をまとめた <code>SymbolicArtifact</code> のタプルが取得できます。</li>
+<li><code>SymbolicPrecomputation</code> を参照し、利用可能なコンポーネントを検査した上で evaluators を生成します。</li>
+</ul>
+<h3 id="_2">補助クラス<a class="headerlink" href="#_2" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>SymbolicArtifact</code></li>
+<li>記号式 (<code>expr</code>) と対応する JAX 関数 (<code>func</code>) をまとめたデータコンテナ。</li>
+<li><code>QuasiLikelihoodEvaluator.S(k)</code> などが返す成果物にもこのコンテナが使われます。</li>
+<li><code>SymbolicPrecomputation</code></li>
+<li>前処理済みの記号式と関数をまとめた不変データクラス。</li>
+<li>例外クラス</li>
+<li><code>SymbolicPreparationError</code>: 記号前処理で致命的エラーが発生した場合に送出。</li>
+</ul>
+<h2 id="_3">使い方の流れ<a class="headerlink" href="#_3" title="Permanent link">¶</a></h2>
+<ol>
+<li><strong>モデルの準備</strong></li>
+<li><code>DegenerateDiffusionProcess</code> など、<code>A_func</code>, <code>B_func</code>, <code>H_func</code> を JAX 互換で提供するモデルインスタンスを用意します。</li>
+<li>
+<p><code>LikelihoodEvaluator</code> の初期化時にこれらの関数が存在しないと <code>AttributeError</code> となります。</p>
+</li>
+<li>
+<p><strong><code>LikelihoodEvaluator</code> を初期化</strong>
+   </p><div class="highlight"><pre><span></span><code><span class="n">likelihood</span> <span class="o">=</span> <span class="n">LikelihoodEvaluator</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</code></pre></div><p></p>
+</li>
+<li>
+<p>既に前処理結果がある場合は <code>precomputed=SymbolicPrecomputation(...)</code> を渡して再利用可能です。</p>
+</li>
+<li>
+<p><strong>初期化エラーの確認</strong>
+   </p><div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">degenerate_diffusion.evaluation.likelihood_evaluator</span><span class="w"> </span><span class="kn">import</span> <span class="n">SymbolicPreparationError</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">likelihood</span> <span class="o">=</span> <span class="n">LikelihoodEvaluator</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">SymbolicPreparationError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"前処理に失敗しました"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+</code></pre></div><p></p>
+</li>
+<li>
+<p>C や V が特異な場合などは初期化時に <code>SymbolicPreparationError</code> が送出されるため、モデル式やパラメータを調整してください。</p>
+</li>
+<li>
+<p><strong>疑似尤度の evaluator を生成</strong></p>
+</li>
+<li><code>make_quasi_likelihood_l1_evaluator</code>, <code>make_quasi_likelihood_l1_prime_evaluator</code>, <code>make_quasi_likelihood_l2_evaluator</code>, <code>make_quasi_likelihood_l3_evaluator</code> を用途に応じて呼び出します。戻り値はすべて <code>jit</code> 済みの callable です。</li>
+<li>
+<p>必須成分が欠けている場合は初期化時点で <code>SymbolicPreparationError</code> が送出されるため、モデル式やパラメータを調整してください。</p>
+</li>
+<li>
+<p><strong>最適化ルーチンへ渡す</strong></p>
+</li>
+<li>evaluator は callable (JAX 関数) を返します。<code>parameter_estimator.m_estimate</code> や <code>newton_solve</code> などと組み合わせてパラメータ推定を実施します。</li>
+</ol>
+<h2 id="sympy">SymPy による記号式の簡約と高速化<a class="headerlink" href="#sympy" title="Permanent link">¶</a></h2>
+<p>V1 系の疑似尤度は高次の <code>S_l</code> テンソルを多数評価するため、lambdify された関数が大きくなりがちです。2024.06 時点の実装では、<code>degenerate_diffusion/evaluation/likelihood_evaluator.py:424-440</code> で SymPy の簡約機能を使い、JAX 側の実行コストを抑えています。仕組みは次の通りです。</p>
+<ul>
+<li><strong><code>sympy.simplify</code> の適用</strong></li>
+<li><code>Array(...).applyfunc(sp.simplify)</code> とすることで、テンソルの各要素ごとに簡約を試みます。</li>
+<li><code>_simplify_tensor</code> ヘルパーを介して <code>S_xx</code>, <code>S_xy</code>, <code>S_yx</code>, <code>S_yy</code> それぞれに同じ処理を実施しています。</li>
+<li>
+<p><code>simplify</code> は式を縮約することが多い一方、場合によっては複雑化させることもあります。実装ではテンソル要素ごとに適用し、後続の <code>lambdify</code> で生成される JAX 関数のサイズを抑制しています。</p>
+</li>
+<li>
+<p><strong><code>sympy.cse</code>（共通部分式抽出）の利用</strong></p>
+</li>
+<li><code>lambdify(..., modules="jax", cse=True)</code> を指定すると、SymPy が式内の共通部分を自動抽出し、JAX の演算としても一度だけ評価するように変換してくれます。</li>
+<li>
+<p><code>simplify</code> と組み合わせることで、<code>k</code> が大きい場合でも JIT 後の実行が大幅に高速化されることを確認しています。</p>
+</li>
+<li>
+<p><strong>導入手順のポイント</strong></p>
+</li>
+<li>SymPy で得たテンソル（<code>Array</code>）を <code>simplify</code> する。</li>
+<li><code>lambdify</code> する際に <code>cse=True</code> を付ける。</li>
+<li>生成された <code>SymbolicArtifact</code> をキャッシュし、JAX evaluator から再利用する。</li>
+</ul>
+<p>これらの処理は既存コードに組み込まれているため、ユーザー側で追加作業は不要です。独自にテンソル式を拡張する場合は、同じパターンを踏襲すると評価コストを抑えやすくなります。</p>
+<h2 id="evaluator">各 evaluator の依存関係<a class="headerlink" href="#evaluator" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>evaluator</th>
+<th>目的</th>
+<th>要求される主なコンポーネント</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>l1</code> (<code>make_quasi_likelihood_l1_evaluator</code>)</td>
+<td>フル疑似尤度</td>
+<td><code>inv_S0_*</code> 系、<code>log_det_S0</code></td>
+</tr>
+<tr>
+<td><code>l1_prime</code> (<code>make_quasi_likelihood_l1_prime_evaluator</code>)</td>
+<td>一部簡略化版</td>
+<td><code>inv_C</code>, <code>log_det_C</code></td>
+</tr>
+<tr>
+<td><code>l2</code> (<code>make_quasi_likelihood_l2_evaluator</code>)</td>
+<td><span class="arithmatex">\(\theta_2\)</span> 向け</td>
+<td><code>inv_C</code></td>
+</tr>
+<tr>
+<td><code>l3</code> (<code>make_quasi_likelihood_l3_evaluator</code>)</td>
+<td><span class="arithmatex">\(\theta_3\)</span> 向け</td>
+<td><code>inv_V</code>, <code>partial_x_H^T V^{-1}</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>l3</code> は特に <code>V</code> が特異な場合に初期化段階で失敗するため、<code>LikelihoodEvaluator</code> の生成時に <code>SymbolicPreparationError</code> を捕捉し、必要に応じてモデルの記号式を修正してください。</p>
+<h2 id="l-l_0"><code>L</code> / <code>L_0</code> の利用<a class="headerlink" href="#l-l_0" title="Permanent link">¶</a></h2>
+<ul>
+<li>記号式の入力に対して <span class="arithmatex">\(L^k f\)</span> や <span class="arithmatex">\(L_0^k f\)</span> を計算できます。</li>
+<li><code>L_0_func</code> は (x, y, θ₁, θ₂, θ₃) を引数に取る JAX 互換の関数を返すため、疑似尤度計算内部でも利用されています。</li>
+<li>内部キャッシュは SymPy の式オブジェクトを不変化してキーにする方式へ変更されています。旧来の <code>srepr</code> ベースのキャッシュより頑健です。</li>
+</ul>
+<h2 id="fnmodelipynb">例: <code>FNmodel.ipynb</code> の抜粋<a class="headerlink" href="#fnmodelipynb" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="n">likelihood</span> <span class="o">=</span> <span class="n">LikelihoodEvaluator</span><span class="p">(</span><span class="n">FNmodel</span><span class="p">)</span>
+
+<span class="n">lk1</span> <span class="o">=</span> <span class="n">likelihood</span><span class="o">.</span><span class="n">make_quasi_likelihood_l1_evaluator</span><span class="p">(</span>
+    <span class="n">x_series</span><span class="o">=</span><span class="n">x_series</span><span class="p">,</span> <span class="n">y_series</span><span class="o">=</span><span class="n">y_series</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="n">h</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span>
+<span class="p">)</span>
+
+<span class="n">lk3</span> <span class="o">=</span> <span class="n">likelihood</span><span class="o">.</span><span class="n">make_quasi_likelihood_l3_evaluator</span><span class="p">(</span>
+    <span class="n">x_series</span><span class="o">=</span><span class="n">x_series</span><span class="p">,</span> <span class="n">y_series</span><span class="o">=</span><span class="n">y_series</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="n">h</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span>
+<span class="p">)</span>
+</code></pre></div>
+<h2 id="_4">発生しうる例外<a class="headerlink" href="#_4" title="Permanent link">¶</a></h2>
+<ul>
+<li><code>SymbolicPreparationError</code></li>
+<li>記号計算の過程で逆行列が計算できないなど致命的エラーが発生した場合に送出。</li>
+<li>モデルの定義（<code>B</code>, <code>H</code> など）を再確認してください。</li>
+<li><code>ValueError</code></li>
+<li><code>make_quasi_*</code> が時系列長チェックや <code>k</code> の非負チェックで利用。</li>
+<li><code>IndexError</code></li>
+<li><code>Dx_func</code>/<code>Dy_func</code> で要求される L₀ の次数が未生成の場合に明示的に発生させます。<code>k</code> と L₀ の生成範囲が一致するように注意してください。</li>
+</ul>
+<h2 id="_5">旧バージョンとの違い<a class="headerlink" href="#_5" title="Permanent link">¶</a></h2>
+<ul>
+<li>初期化時に記号計算が失敗した場合は <code>SymbolicPreparationError</code> を送出する設計に統一しました。</li>
+<li>大量のロジックが 1 クラスに集約されていた構造から、役割ごとの専用クラスへ分割されています。</li>
+<li>キャッシュキーが <code>srepr</code> 文字列から、SymPy 式の不変化データへ変更されました。</li>
+<li>初期化で記号計算に失敗した場合は例外で即座に伝播するよう統一し、欠損した成果物を残さない設計にしました。</li>
+<li><code>DegenerateDiffusionProcess</code> 側でも <code>A</code>/<code>B</code>/<code>H</code> を <code>SymbolicArtifact</code> として保持し、疑似尤度パイプライン全体で同じ取り扱いになっています。</li>
+</ul>
+<h2 id="_6">設計メモ<a class="headerlink" href="#_6" title="Permanent link">¶</a></h2>
+<ul>
+<li>SymPy の <code>derive_by_array</code> は通常の微分係数がそのまま式の前に掛かる形で返ってくるため、係数が増える箇所を想定したうえで後段の処理を組む。</li>
+<li>
+<p><code>SymbolicPreparationError</code> を捕捉することで、記号計算の失敗原因を早期に知ることができる。</p>
+</li>
+<li>
+<p>組み込みの行列 <code>C_sym</code> や <code>C_func</code> は必ず構築される前提なので、ラッパークラスを設けず素のまま保持しています。</p>
+</li>
+<li>一方で逆行列や log det などは特異で計算できないケースがあるため <code>SymbolicArtifact</code> で値と状態を一緒に持たせ、欠損が判明した時点で例外を送出して原因を明示しています。</li>
+<li><code>SymbolicPrecomputation</code> を <code>frozen=True</code> にしているのは、生成後に内部状態を差し替えず（再 lambdify せず）安全に参照共用するためです。更新が必要になった場合は再生成します。</li>
+</ul>
+<h2 id="_7">トラブルシューティング<a class="headerlink" href="#_7" title="Permanent link">¶</a></h2>
+<ul>
+<li><strong><code>SymbolicPreparationError</code> が投げられる</strong></li>
+<li><code>C</code> や <code>V</code> の記号計算が失敗した場合、初期化時に <code>SymbolicPreparationError</code> が生じます。モデル側の式やパラメータを調整し、再度初期化してください。</li>
+<li><strong>疑似尤度が <code>nan</code> を返す</strong></li>
+<li>JAX の計算中で非有界値が出た可能性があります。入力データのスケールや <code>theta</code> の初期値を確認してください。</li>
+<li><strong><code>IndexError</code> が <code>Dx_func</code> から出る</strong></li>
+<li><code>make_quasi_*</code> に渡した <code>k</code> と L₀ 関数の確保数が一致しているか確認してください。標準提供のファクトリでは <code>k</code> の値に合わせて十分な L₀ を生成します。</li>
+</ul>
+<h2 id="_8">参考情報<a class="headerlink" href="#_8" title="Permanent link">¶</a></h2>
+<ul>
+<li>推定ルーチン: <code>degenerate_diffusion/estimation/parameter_estimator.py</code></li>
+<li>シミュレーション例: <code>degenerate_diffusion/processes/degenerate_diffusion_process.py</code></li>
+<li>Notebook サンプル: <code>FNmodel.ipynb</code></li>
+</ul>
+<p>以上を参考に、必要に応じて Notebook やスクリプトに組み込んでください。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>

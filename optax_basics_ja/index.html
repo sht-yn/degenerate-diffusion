@@ -1,0 +1,875 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://sht-yn.github.io/degenerate-diffusion/optax_basics_ja/">
+      
+      
+        <link rel="prev" href="../likelihood_evaluator_guide/">
+      
+      
+        <link rel="next" href="../parameter_estimator_usage/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Optax Basics (JA) - Degenerate Diffusion Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#optax" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-header__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Degenerate Diffusion Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Optax Basics (JA)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-nav__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    Degenerate Diffusion Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jax_control_flow_loops_ja/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    JAX Control Flow Loops (JA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../likelihood_evaluator_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Likelihood Evaluator Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Optax Basics (JA)
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Optax Basics (JA)
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0-update-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      0. まず押さえる結論（黒箱ではない／update は1ステップ）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. 用語（最初にここだけ）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-init-update-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. 基本モデル（init / update / apply）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-optimizer-state-adamw" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Optimizer State を詳しく（AdamW を例に）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. chain で前処理→最適化の順に組む
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. chain で前処理→最適化の順に組む">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#faq-chain-optimizer" class="md-nav__link">
+    <span class="md-ellipsis">
+      補足（FAQ）: chain は optimizer を“書き換える”の？
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-adam-adamw-decoupled-weight-decay" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Adam と AdamW の違い（decoupled weight decay）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-jit-fori_loop-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. 高速に複数ステップ回す最小例（JIT + fori_loop / scan）
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. 高速に複数ステップ回す最小例（JIT + fori_loop / scan）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-fori_loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.1 fori_loop 版（履歴不要・固定回数）
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.2 scan 版（履歴が必要・固定回数）
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-clip_by_global_norm-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. clip_by_global_norm と併用（chain）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-parameter_estimator_newpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. 本リポジトリでの運用（parameter_estimator_new.py）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. よくある落とし穴
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. 参考パターン（最大化問題のひな型）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-glossary" class="md-nav__link">
+    <span class="md-ellipsis">
+      付録A. 用語集（Glossary）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#b-update-1adamw" class="md-nav__link">
+    <span class="md-ellipsis">
+      付録B. 「update は1ステップだけ」の注意点（AdamWは反復法だが黒箱ではない）
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-optimizer-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      付録C. Optimizer State の詳細式（参考）
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameter_estimator_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Parameter Estimator Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uv_workspace_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UV Workspace Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../blackjax_nuts_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    BlackJax
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="optax">Optax の最小ルールと本リポジトリでの使い方<a class="headerlink" href="#optax" title="Permanent link">¶</a></h1>
+<p>このノートは Optax の「最小限の文法と設計ルール」を、手前味噌にならないレベルで短く整理します。最初に「Optax は黒箱ではなく組み立て式」「state と updates が肝」という要点を先に押さえ、そのうえで使い方と実装パターンを示します。</p>
+<h2 id="0-update-1">0. まず押さえる結論（黒箱ではない／update は1ステップ）<a class="headerlink" href="#0-update-1" title="Permanent link">¶</a></h2>
+<ul>
+<li>Optax は SciPy の minimize のような“手法を選ぶだけの黒箱”ではありません。前処理や更新則などの「変換（transform）」を組み合わせ、あなたが最適化ループを組み立てます。</li>
+<li><code>optimizer.update(grads, state, params)</code> は「その1回分の更新量（updates）」と「次の内部状態（state）」を返すだけです。複数回の更新をまとめて行うものではありません（複数回は fori_loop/scan/while_loop で回します）。</li>
+</ul>
+<h2 id="1">1. 用語（最初にここだけ）<a class="headerlink" href="#1" title="Permanent link">¶</a></h2>
+<ul>
+<li>Transform（変換）: <code>optax.adamw(...)</code> や <code>optax.clip_by_global_norm(...)</code> が返す「最適化処理の部品」。<code>init / update</code> を持つ。</li>
+<li>Optimizer State（最適化器の状態）: モメンタムや二乗平均など、変換が内部で保持する統計の PyTree。<code>state = optimizer.init(params)</code> で作る。</li>
+<li>Updates（更新量）: <code>optimizer.update(...)</code> が返す、パラメタと同形の差分 PyTree。<code>optax.apply_updates(params, updates)</code> で適用（本質的に params + updates）。</li>
+<li>Params（パラメタ）: 学習対象（PyTree）。<code>init / update</code> の形状の基準。</li>
+<li>Chain（連結）: <code>optax.chain(t1, t2, ...)</code> で変換を左から順に適用（例: クリップ → AdamW）。</li>
+</ul>
+<h2 id="2-init-update-apply">2. 基本モデル（init / update / apply）<a class="headerlink" href="#2-init-update-apply" title="Permanent link">¶</a></h2>
+<ul>
+<li>変換（Transform）は次の3役割を持ちます。
+  1) <code>init(params)</code> → Optimizer State を作る
+  2) <code>update(grads, state, params)</code> → (updates, next_state) を返す
+  3) <code>optax.apply_updates(params, updates)</code> → 新しい params を得る（要素ごとの加算）</li>
+</ul>
+<p>これが Optax の根幹です。</p>
+<h2 id="3-optimizer-state-adamw">3. Optimizer State を詳しく（AdamW を例に）<a class="headerlink" href="#3-optimizer-state-adamw" title="Permanent link">¶</a></h2>
+<p>Optimizer State は、各 transform が「更新を適応的に決めるために必要な内部統計」を保持する PyTree です。Adam/AdamW の典型は以下のとおりです。</p>
+<ul>
+<li>m（一次モーメント）: 勾配の移動平均（モメンタム）</li>
+<li>v（二次モーメント）: 勾配二乗の移動平均</li>
+<li>count: 反復カウント（バイアス補正に使う）</li>
+</ul>
+<p>最小化規約での更新の概念式:
+</p><div class="highlight"><pre><span></span><code>m_t = β1 * m_{t-1} + (1-β1) * g_t
+v_t = β2 * v_{t-1} + (1-β2) * (g_t ⊙ g_t)
+m̂_t = m_t / (1 - β1^t)
+v̂_t = v_t / (1 - β2^t)
+updates = - lr * m̂_t / (sqrt(v̂_t) + ε)
+# AdamW は decoupled weight decay により、勾配とは独立に params を減衰
+params_next = params + updates  -  lr * weight_decay * params
+</code></pre></div>
+実際には、これらは <code>optimizer.update(grads, state, params)</code> の内部で計算され、戻り値の <code>updates</code> と次の <code>state</code> が返ってきます。<p></p>
+<p>チェーン時の State:
+- <code>optax.chain(clip, adamw)</code> のように複数変換を連結すると、各変換の state が束ねられた PyTree になります（クリッピングは無状態のことが多い）。
+- パラメタの PyTree 形状や dtype を変えた場合は、<code>state = optimizer.init(new_params)</code> で再初期化するのが安全です。チェックポイントは <code>(params, state, config)</code> をまとめて保存・復元します。</p>
+<h2 id="4-chain">4. chain で前処理→最適化の順に組む<a class="headerlink" href="#4-chain" title="Permanent link">¶</a></h2>
+<ul>
+<li><code>optax.chain(t1, t2, t3, ...)</code> は、左から順に変換を適用します。</li>
+<li>例: <code>optax.chain(optax.clip_by_global_norm(clip_norm), optax.adamw(...))</code></li>
+<li>grads に対してまず「グローバルノルムでクリップ」し、その後に「AdamW のモメンタム・重み減衰」を適用する、という順序を構成します。</li>
+</ul>
+<p>ポイント: クリッピングなどの「勾配前処理」は AdamW より前に置くのが定石です。</p>
+<h3 id="faq-chain-optimizer">補足（FAQ）: chain は optimizer を“書き換える”の？<a class="headerlink" href="#faq-chain-optimizer" title="Permanent link">¶</a></h3>
+<ul>
+<li>いいえ。<code>optax.chain</code> は「既存オプティマイザの <code>.update</code> を後から書き換える（モンキーパッチする）」のではありません。</li>
+<li>複数の Transform を合成して「新しい GradientTransformation（= <code>init/update</code> のペア）」を作る関数です。</li>
+<li>内部のイメージ（擬似コード）:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">chain</span><span class="p">(</span><span class="o">*</span><span class="n">transforms</span><span class="p">):</span>
+  <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">params</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">transforms</span><span class="p">)</span>
+
+  <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="n">updates</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="c1"># 最初の updates は grads（= 勾配）を想定</span>
+    <span class="n">new_states</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">transforms</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+      <span class="n">updates</span><span class="p">,</span> <span class="n">s</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">updates</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>  <span class="c1"># 左から順に前処理→最適化…</span>
+      <span class="n">new_states</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">updates</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">new_states</span><span class="p">)</span>
+
+  <span class="k">return</span> <span class="n">GradientTransformation</span><span class="p">(</span><span class="n">init</span><span class="o">=</span><span class="n">init</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="n">update</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>したがって「optimizer をカスタマイズ」というより、「1ステップの update 規則を部品の連結で“定義する”」イメージです。</li>
+<li>なお、<code>update</code> は常に“1ステップ分”だけ計算します。複数ステップ進めるには <code>fori_loop/scan/while_loop</code> などでループを回します（§6 を参照）。</li>
+</ul>
+<h2 id="5-adam-adamw-decoupled-weight-decay">5. Adam と AdamW の違い（decoupled weight decay）<a class="headerlink" href="#5-adam-adamw-decoupled-weight-decay" title="Permanent link">¶</a></h2>
+<ul>
+<li>Adam: 通常の Adam は L2 正則化を勾配に項として足す形になりがちです。</li>
+<li>AdamW: 重み減衰（weight decay）を勾配から切り離して適用（decoupled）。これによりスケーリング挙動が安定しやすい。</li>
+<li>Optax の <code>adamw(learning_rate, weight_decay, ...)</code> はこの AdamW を返します。</li>
+</ul>
+<h2 id="6-jit-fori_loop-scan">6. 高速に複数ステップ回す最小例（JIT + fori_loop / scan）<a class="headerlink" href="#6-jit-fori_loop-scan" title="Permanent link">¶</a></h2>
+<p>複数ステップの最適化を JAX で高速に回すには、ループを <code>jax.jit</code> で丸ごとコンパイルします。固定回数なら <code>lax.fori_loop</code> か <code>lax.scan</code> が便利です。</p>
+<h3 id="41-fori_loop">4.1 fori_loop 版（履歴不要・固定回数）<a class="headerlink" href="#41-fori_loop" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span><span class="o">,</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">optax</span>
+
+<span class="n">opt</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+  <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">p</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># 最小化の例（最大化なら -objective を loss に）</span>
+
+<span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train_n_steps</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">n_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+  <span class="k">def</span><span class="w"> </span><span class="nf">body</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">carry</span><span class="p">):</span>
+    <span class="n">params</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">carry</span>
+    <span class="n">grads</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">params</span><span class="p">)</span>          <span class="c1"># 最大化なら grads = -jax.grad(objective)(params)</span>
+    <span class="n">updates</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">apply_updates</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">updates</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+
+  <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">fori_loop</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_steps</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">))</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,))</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">params</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">train_n_steps</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">n_steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="42-scan">4.2 scan 版（履歴が必要・固定回数）<a class="headerlink" href="#42-scan" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span><span class="o">,</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">optax</span>
+
+<span class="n">opt</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">loss</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+  <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">p</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">train_scan</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+  <span class="k">def</span><span class="w"> </span><span class="nf">step_fn</span><span class="p">(</span><span class="n">carry</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+    <span class="n">params</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">carry</span>
+    <span class="n">grads</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">params</span><span class="p">)</span>
+    <span class="n">updates</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">apply_updates</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">updates</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">),</span> <span class="n">params</span>  <span class="c1"># 履歴として params を収集（不要なら None）</span>
+
+  <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">),</span> <span class="n">traj</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">step_fn</span><span class="p">,</span> <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">),</span> <span class="n">xs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="n">steps</span><span class="p">)</span>
+  <span class="k">return</span> <span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">traj</span>  <span class="c1"># traj.shape = (steps, *params.shape)</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span><span class="p">,))</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">traj</span> <span class="o">=</span> <span class="n">train_scan</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+</code></pre></div>
+<p>注意
+- 上の例は「最小化」規約です。目的が最大化なら <code>loss = lambda p: -objective(p)</code> とするか、<code>grads = -jax.grad(objective)(params)</code> として符号を反転してください。
+- 反復回数が実行時に決まる（収束で停止）場合は <code>lax.while_loop</code> が適切です。</p>
+<p>補足: <code>optax.apply_updates(params, updates)</code> は本質的に「要素ごとの加算」です（PyTree 同形の <code>params + updates</code>）。
+updates には学習率・モメンタム・重み減衰・クリッピングなどの効果がすでに反映されているため、ユーザ側でさらに学習率を掛ける必要はありません。差分を確認したい場合は <code>updates</code> 自体をログすれば OK です。</p>
+<h2 id="7-clip_by_global_norm-chain">7. clip_by_global_norm と併用（chain）<a class="headerlink" href="#7-clip_by_global_norm-chain" title="Permanent link">¶</a></h2>
+<p></p><div class="highlight"><pre><span></span><code><span class="n">opt</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+    <span class="n">optax</span><span class="o">.</span><span class="n">clip_by_global_norm</span><span class="p">(</span><span class="n">clip_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">),</span>
+    <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">updates</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">grads</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+<span class="n">params</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">apply_updates</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">updates</span><span class="p">)</span>
+</code></pre></div>
+- <code>clip_by_global_norm</code> は勾配ベクトル全体の L2 ノルムを上限 <code>clip_norm</code> に収める前処理。
+- その後に AdamW がモメンタムと減衰を加味した更新を計算します。<p></p>
+<h2 id="8-parameter_estimator_newpy">8. 本リポジトリでの運用（parameter_estimator_new.py）<a class="headerlink" href="#8-parameter_estimator_newpy" title="Permanent link">¶</a></h2>
+<ul>
+<li>背景: 「最大化」問題。ヘッセが負定でない場合は AdamW へフォールバック。</li>
+<li>構成:
+<div class="highlight"><pre><span></span><code><span class="n">adam</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="n">weight_decay</span><span class="p">)</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="n">optax</span><span class="o">.</span><span class="n">clip_by_global_norm</span><span class="p">(</span><span class="n">clip_norm</span><span class="p">),</span> <span class="n">adam</span><span class="p">)</span>
+<span class="n">state0</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
+</code></pre></div></li>
+<li>反復内の AdamW 分岐:
+<div class="highlight"><pre><span></span><code><span class="c1"># g: objective の勾配（上昇方向へ動きたい）</span>
+<span class="c1"># Maximization のため、最小化規約の Optax には -g を渡すのが自然</span>
+<span class="n">updates</span><span class="p">,</span> <span class="n">state_next</span> <span class="o">=</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="o">-</span><span class="n">g</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
+<span class="n">theta_next</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">apply_updates</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">updates</span><span class="p">)</span>
+</code></pre></div></li>
+<li>これにより「AdamW は最小化器」という規約を保ったまま、目的は最大化（上昇）に整合します。</li>
+</ul>
+<p>補足:
+- <code>optimizer.update(grads, state, params)</code> の第3引数 <code>params</code> は一部の変換（weight decay など）で必要です。常に渡しておくのが無難です。
+- learning rate / decay / clip の値は問題に応じてチューニングします。Newton 分岐が安定なら AdamW 分岐は稀にしか使われない想定でも、数値的安全性のためクリップは有効です。</p>
+<h2 id="9">9. よくある落とし穴<a class="headerlink" href="#9" title="Permanent link">¶</a></h2>
+<ul>
+<li>最大化で <code>optimizer.update(g, ...)</code> としてしまい、実は「降下」している。</li>
+<li>対策: <code>optimizer.update(-g, ...)</code> にするか、loss を <code>-objective</code> にする。</li>
+<li>chain の順序ミス</li>
+<li>例: AdamW の後に clip を置くと、モメンタム計算後の更新がクリップされ、挙動が変わる。</li>
+<li>state の取り回し</li>
+<li><code>state = optimizer.init(params)</code> を忘れたり、PyTree 形状が合わないとエラー。パラメタの dtype 変更時にも注意。</li>
+</ul>
+<h2 id="10">10. 参考パターン（最大化問題のひな型）<a class="headerlink" href="#10" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><span class="n">opt</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+    <span class="n">optax</span><span class="o">.</span><span class="n">clip_by_global_norm</span><span class="p">(</span><span class="n">clip_norm</span><span class="p">),</span>
+    <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="n">lr</span><span class="p">,</span> <span class="n">weight_decay</span><span class="o">=</span><span class="n">wd</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ascend_step</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">aux</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">obj</span><span class="p">(</span><span class="n">th</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">objective_fn</span><span class="p">(</span><span class="n">th</span><span class="p">,</span> <span class="n">aux</span><span class="p">))</span>  <span class="c1"># maximize</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">obj</span><span class="p">)(</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">updates</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="n">opt</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="o">-</span><span class="n">g</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>  <span class="c1"># 最大化なので -g</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">apply_updates</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">updates</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">theta</span><span class="p">,</span> <span class="n">state</span>
+</code></pre></div>
+<p>この最小ルールを押さえておけば、<code>parameter_estimator_new.py</code> の Optimizer 構築と while_loop 内での運用意図を読み解けるはずです。</p>
+<hr>
+<h2 id="a-glossary">付録A. 用語集（Glossary）<a class="headerlink" href="#a-glossary" title="Permanent link">¶</a></h2>
+<ul>
+<li>Transform（変換）</li>
+<li><code>optax.adamw(...)</code> や <code>optax.clip_by_global_norm(...)</code> が返す「最適化処理の部品」。</li>
+<li><code>init/ update</code> を提供し、連結（<code>optax.chain</code>）してパイプラインを構築できる。</li>
+<li>Optimizer State（最適化器の状態）</li>
+<li>モメンタム、二乗平均、重み減衰の内部統計などを保持する PyTree。</li>
+<li><code>state = optimizer.init(params)</code> で作成し、<code>updates, state = optimizer.update(...)</code> で毎ステップ更新。</li>
+<li>Updates（更新量の PyTree）</li>
+<li><code>update</code> が返す「パラメタと同形の差分」。<code>optax.apply_updates(params, updates)</code> で適用。</li>
+<li>変換の組み合わせ（clip→adamw など）を経た最終的な更新値。</li>
+<li>Params（パラメタ）</li>
+<li>学習対象の PyTree。<code>init/ update</code> 双方に形状が必要。</li>
+<li>Chain（連結）</li>
+<li><code>optax.chain(t1, t2, ...)</code> で変換を左から順に適用。前処理→最適化の順を守るのが定石。</li>
+<li>Learning rate（学習率）</li>
+<li>更新幅のスケーリング。スケジュール（<code>optax.cosine_decay_schedule</code> 等）と組み合わせ可。</li>
+<li>Weight decay（重み減衰）</li>
+<li>パラメタに直接の減衰を与える正則化。AdamW は勾配から独立に適用（decoupled）。</li>
+<li>Clipping（クリッピング）</li>
+<li>勾配/更新のノルムを上限に収める前処理。<code>clip_by_global_norm</code> は全体 L2 ノルム基準。</li>
+</ul>
+<hr>
+<h2 id="b-update-1adamw">付録B. 「update は1ステップだけ」の注意点（AdamWは反復法だが黒箱ではない）<a class="headerlink" href="#b-update-1adamw" title="Permanent link">¶</a></h2>
+<ul>
+<li><code>optimizer.update(grads, state, params)</code> は、その呼び出し1回ぶんの「更新量（updates）」と「次の状態（state）」を返します。複数回ぶんをまとめて適用するものではありません。</li>
+<li>Adam/AdamW は反復法ですが、各反復での“1ステップの更新規則”を定めています。よって、<code>update</code> の1回呼び出し = 1ステップ更新の計算です。</li>
+<li>複数ステップ進めたい場合は、ループ（<code>lax.fori_loop</code> / <code>lax.scan</code> / <code>lax.while_loop</code>）で複数回 <code>update → apply_updates</code> を回してください（§4 参照）。</li>
+<li><code>optax.chain(...)</code> は「前処理→最適化」の合成を“1ステップの中で順に適用”しているだけで、複数回の反復がまとめて実行されるわけではありません。</li>
+</ul>
+<hr>
+<h2 id="c-optimizer-state">付録C. Optimizer State の詳細式（参考）<a class="headerlink" href="#c-optimizer-state" title="Permanent link">¶</a></h2>
+<p>Optimizer State は、各 transform が「更新を適応的に決めるために必要な内部統計」を保持する PyTree です。AdamW の場合、代表的には以下が含まれます。</p>
+<ul>
+<li>m（一次モーメント）: 勾配の移動平均（モメンタム）</li>
+<li>v（二次モーメント）: 勾配二乗の移動平均</li>
+<li>count: 反復カウント（バイアス補正に使う）</li>
+</ul>
+<p>典型的な更新の流れ（最小化規約）:
+</p><div class="highlight"><pre><span></span><code>m_t = β1 * m_{t-1} + (1-β1) * g_t
+v_t = β2 * v_{t-1} + (1-β2) * (g_t ⊙ g_t)
+m̂_t = m_t / (1 - β1^t)
+v̂_t = v_t / (1 - β2^t)
+updates = - lr * m̂_t / (sqrt(v̂_t) + ε)   # 最小化の降下方向
+# AdamW の decoupled weight decay は勾配とは独立に params に減衰を適用
+params_next = params + updates  -  lr * weight_decay * params
+</code></pre></div>
+Optax 実装では、これらの処理が <code>optimizer.update(grads, state, params)</code> の中で行われ、戻り値の <code>updates</code> と次の <code>state</code> が返されます。<p></p>
+<p>チェーン時の State:
+- <code>optax.chain(clip, adamw)</code> のように複数変換を連結すると、各変換の state が束ねられた PyTree になります。
+- 例えば <code>clip_by_global_norm</code> は「無状態」のことが多く、一方で <code>adamw</code> は <code>m/v/count</code> 等を持ちます。</p>
+<p>再初期化・リストアの指針:
+- パラメタの PyTree 形状や dtype を変えた場合は、<code>state = opt.init(new_params)</code> で再初期化するのが安全です。
+- チェックポイントを取る場合、<code>(params, state, opt_config)</code> をセットで保存・復元します。</p>
+<p>JAX 的な不変性と best practices:
+- state はイミュータブルに扱い、毎ステップ <code>updates, state = opt.update(...); params = apply_updates(...)</code> で新しい値を受け取ります。
+- while_loop/scan 内の carry として <code>(params, state)</code> を回すと JIT で高速化できます（§4 参照）。
+- 最大化では <code>grads</code> の符号を反転して渡す（<code>updates</code> 自体は“降下”規約で生成されるため）。</p>
+<p>補足: Stateless な transform
+- クリッピングや単純なスケーリングは state を持たないことがあります。この場合でも <code>chain</code> の中で他の変換の state と一緒に扱われます。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>

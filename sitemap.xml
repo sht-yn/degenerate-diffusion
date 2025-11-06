@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/blackjax_nuts_usage/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/jax_control_flow_loops_ja/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/likelihood_evaluator_guide/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/optax_basics_ja/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/parameter_estimator_usage/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://sht-yn.github.io/degenerate-diffusion/uv_workspace_setup/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+</urlset>

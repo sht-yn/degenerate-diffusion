@@ -1,0 +1,754 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://sht-yn.github.io/degenerate-diffusion/jax_control_flow_loops_ja/">
+      
+      
+      
+        <link rel="next" href="../likelihood_evaluator_guide/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>JAX Control Flow Loops (JA) - Degenerate Diffusion Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#jax-scan-while_loop-fori_loop" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-header__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Degenerate Diffusion Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              JAX Control Flow Loops (JA)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Degenerate Diffusion Documentation" class="md-nav__button md-logo" aria-label="Degenerate Diffusion Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    Degenerate Diffusion Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    JAX Control Flow Loops (JA)
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    JAX Control Flow Loops (JA)
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      共通事項
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#laxscan" class="md-nav__link">
+    <span class="md-ellipsis">
+      lax.scan
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="lax.scan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      等価な擬似 Python コード
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      特徴
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#laxwhile_loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      lax.while_loop
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="lax.while_loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      等価な擬似 Python コード
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      特徴
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#laxfori_loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      lax.fori_loop
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="lax.fori_loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      等価な擬似 Python コード
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      特徴
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#newton-while_loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      本リポジトリの例: Newton 法（最大化）での while_loop
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="本リポジトリの例: Newton 法（最大化）での while_loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      要約
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      擬似コード（本実装の骨子）
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      使い分けのまとめ
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../likelihood_evaluator_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Likelihood Evaluator Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optax_basics_ja/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Optax Basics (JA)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameter_estimator_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Parameter Estimator Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uv_workspace_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    UV Workspace Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../blackjax_nuts_usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    BlackJax
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="jax-scan-while_loop-fori_loop">JAX の制御フロー: scan / while_loop / fori_loop の使い分け<a class="headerlink" href="#jax-scan-while_loop-fori_loop" title="Permanent link">¶</a></h1>
+<p>このノートでは、JAX の代表的なループ演算 <code>lax.scan</code> / <code>lax.while_loop</code> / <code>lax.fori_loop</code> の違いを、等価な擬似 Python コードとともに整理します。最後に本リポジトリの <code>parameter_estimator_new.py</code> に実装した Newton 法（最大化）での <code>while_loop</code> 例を解説します。</p>
+<h2 id="_1">共通事項<a class="headerlink" href="#_1" title="Permanent link">¶</a></h2>
+<ul>
+<li>いずれも「carry（状態）を受け取り、次ステップの carry を返す」スタイル。</li>
+<li>JIT / 自動微分に対応（ループ本体は JAX 演算を用いる）。</li>
+<li>carry の構造（PyTree）および各葉の shape/dtype は各ステップで不変である必要があります。</li>
+</ul>
+<hr>
+<h2 id="laxscan">lax.scan<a class="headerlink" href="#laxscan" title="Permanent link">¶</a></h2>
+<ul>
+<li>固定長の反復。系列入力 <code>xs</code> を要素ごとに処理し、各ステップの出力を自動でスタックして返します。</li>
+<li>署名（概念図）: <code>(carry, ys) = lax.scan(f, init, xs)</code></li>
+<li>返り値: <code>final_carry, stacked_outputs</code></li>
+</ul>
+<h3 id="python">等価な擬似 Python コード<a class="headerlink" href="#python" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">scan</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">xs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">xs</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">length</span>
+    <span class="n">carry</span> <span class="o">=</span> <span class="n">init</span>
+    <span class="n">ys</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">xs</span><span class="p">:</span>                <span class="c1"># 固定長で最後まで回る</span>
+        <span class="n">carry</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">carry</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># f: (carry, x) -&gt; (carry, y)</span>
+        <span class="n">ys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">carry</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">ys</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="_2">特徴<a class="headerlink" href="#_2" title="Permanent link">¶</a></h3>
+<ul>
+<li>早期停止はできません（必要なら done フラグで更新をマスク）。</li>
+<li>逆伝播が効率的に実装されており、長い系列タスクに向いています。</li>
+<li>履歴（各ステップの出力）が必要な場合に第一候補。</li>
+</ul>
+<hr>
+<h2 id="laxwhile_loop">lax.while_loop<a class="headerlink" href="#laxwhile_loop" title="Permanent link">¶</a></h2>
+<ul>
+<li>収束判定など、反復回数が実行時に決まるループ。</li>
+<li>署名（概念図）: <code>carry = lax.while_loop(cond, body, init_carry)</code></li>
+<li>返り値: <code>final_carry</code>（履歴が必要なら固定長バッファを carry に入れて自前で保持）。</li>
+</ul>
+<h3 id="python_1">等価な擬似 Python コード<a class="headerlink" href="#python_1" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">while_loop</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">init_carry</span><span class="p">):</span>
+    <span class="n">carry</span> <span class="o">=</span> <span class="n">init_carry</span>
+    <span class="k">while</span> <span class="n">cond</span><span class="p">(</span><span class="n">carry</span><span class="p">):</span>        <span class="c1"># cond: carry -&gt; bool (JAXでは jnp.bool_)</span>
+        <span class="n">carry</span> <span class="o">=</span> <span class="n">body</span><span class="p">(</span><span class="n">carry</span><span class="p">)</span>   <span class="c1"># body: carry -&gt; carry</span>
+    <span class="k">return</span> <span class="n">carry</span>
+</code></pre></div>
+<h3 id="_3">特徴<a class="headerlink" href="#_3" title="Permanent link">¶</a></h3>
+<ul>
+<li>早期停止が可能（収束判定など）。</li>
+<li><code>xs</code> のような系列入力引数は無いので、各ステップの入力を変えたい場合は carry 側に入れて自分で管理します（例: <code>i</code> と <code>xs</code> を持ち、<code>x_i = xs[i]</code> を body で取り出す）。</li>
+<li>履歴を取りたい場合は、固定長の配列を carry に入れ、<code>dynamic_update_slice</code> や <code>.at[i].set</code> で埋める。</li>
+</ul>
+<hr>
+<h2 id="laxfori_loop">lax.fori_loop<a class="headerlink" href="#laxfori_loop" title="Permanent link">¶</a></h2>
+<ul>
+<li>固定回数の軽量な for ループ（履歴は返さない）。</li>
+<li>署名（概念図）: <code>carry = lax.fori_loop(start, stop, body, init_carry)</code></li>
+<li>返り値: <code>final_carry</code></li>
+</ul>
+<h3 id="python_2">等価な擬似 Python コード<a class="headerlink" href="#python_2" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fori_loop</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">init_carry</span><span class="p">):</span>
+    <span class="n">carry</span> <span class="o">=</span> <span class="n">init_carry</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">):</span>  <span class="c1"># 固定回数</span>
+        <span class="n">carry</span> <span class="o">=</span> <span class="n">body</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">carry</span><span class="p">)</span>     <span class="c1"># body: (i, carry) -&gt; carry</span>
+    <span class="k">return</span> <span class="n">carry</span>
+</code></pre></div>
+<h3 id="_4">特徴<a class="headerlink" href="#_4" title="Permanent link">¶</a></h3>
+<ul>
+<li>履歴が不要かつ固定回数で済む処理に向きます。</li>
+<li>逆伝播は可能ですが、履歴が必要な場合は <code>scan</code> を使うのが通常です。</li>
+</ul>
+<hr>
+<h2 id="newton-while_loop">本リポジトリの例: Newton 法（最大化）での while_loop<a class="headerlink" href="#newton-while_loop" title="Permanent link">¶</a></h2>
+<p>ファイル: <code>src/degenerate_diffusion/estimation/parameter_estimator_new.py</code></p>
+<p>ニュートン上昇（最大化）において、勾配ノルム <code>||grad|| &lt;= tol</code> で停止させるため <code>jax.lax.while_loop</code> を使っています。</p>
+<h3 id="_5">要約<a class="headerlink" href="#_5" title="Permanent link">¶</a></h3>
+<ul>
+<li>carry = <code>(theta, it, converged)</code></li>
+<li><code>theta</code>: 現在の推定パラメータ（JAX Array）</li>
+<li><code>it</code>: 反復カウント（jnp.int32）</li>
+<li><code>converged</code>: 収束フラグ（jnp.bool_）</li>
+<li>cond: <code>it &lt; max_iters and not converged</code></li>
+<li>body: 勾配・ヘッセを計算し、最大化用の安定化ヘッセ <code>H_safe = H_sym - eps * I</code> でニュートン上昇更新 → ボックス制約に射影</li>
+</ul>
+<h3 id="_6">擬似コード（本実装の骨子）<a class="headerlink" href="#_6" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+
+<span class="n">max_iters</span> <span class="o">=</span> <span class="mi">10_000</span>
+<span class="n">Tol</span> <span class="o">=</span> <span class="mf">1e-7</span>
+<span class="n">Damp</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="n">Eps</span> <span class="o">=</span> <span class="mf">1e-8</span>
+<span class="n">bounds</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># (d, 2)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">aux</span><span class="p">):</span>
+    <span class="k">return</span> <span class="o">...</span>  <span class="c1"># スカラー（最大化）</span>
+
+<span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">newton_solve</span><span class="p">(</span><span class="n">theta0</span><span class="p">,</span> <span class="n">aux</span><span class="p">):</span>
+    <span class="n">theta0</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">bounds</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">theta0</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">false</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">bool_</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">obj</span><span class="p">(</span><span class="n">th</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">objective</span><span class="p">(</span><span class="n">th</span><span class="p">,</span> <span class="n">aux</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">grad</span><span class="p">(</span><span class="n">th</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">obj</span><span class="p">)(</span><span class="n">th</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">hess</span><span class="p">(</span><span class="n">th</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">hessian</span><span class="p">(</span><span class="n">obj</span><span class="p">)(</span><span class="n">th</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">cond</span><span class="p">(</span><span class="n">carry</span><span class="p">):</span>
+        <span class="n">th</span><span class="p">,</span> <span class="n">it</span><span class="p">,</span> <span class="n">conv</span> <span class="o">=</span> <span class="n">carry</span>
+        <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">it</span> <span class="o">&lt;</span> <span class="n">max_iters</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">logical_not</span><span class="p">(</span><span class="n">conv</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">body</span><span class="p">(</span><span class="n">carry</span><span class="p">):</span>
+        <span class="n">th</span><span class="p">,</span> <span class="n">it</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">carry</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">th</span><span class="p">)</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="n">hess</span><span class="p">(</span><span class="n">th</span><span class="p">)</span>
+        <span class="n">H_sym</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">H</span> <span class="o">+</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">eye</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">th</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">th</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">H_safe</span> <span class="o">=</span> <span class="n">H_sym</span> <span class="o">-</span> <span class="n">Eps</span> <span class="o">*</span> <span class="n">eye</span>  <span class="c1"># 最大化: 負定方向に安定化</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">H_safe</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+        <span class="n">th_next</span> <span class="o">=</span> <span class="n">th</span> <span class="o">-</span> <span class="n">Damp</span> <span class="o">*</span> <span class="n">delta</span>
+        <span class="n">th_next</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">th_next</span><span class="p">,</span> <span class="n">b</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="n">conv</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">g</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">Tol</span>
+        <span class="k">return</span> <span class="n">th_next</span><span class="p">,</span> <span class="n">it</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">conv</span>
+
+    <span class="n">th_fin</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">while_loop</span><span class="p">(</span>
+        <span class="n">cond</span><span class="p">,</span>
+        <span class="n">body</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">theta0</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">int32</span><span class="p">),</span> <span class="n">false</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">th_fin</span>
+</code></pre></div>
+<hr>
+<h2 id="_7">使い分けのまとめ<a class="headerlink" href="#_7" title="Permanent link">¶</a></h2>
+<ul>
+<li>収束や条件付き停止が必要 → <code>while_loop</code></li>
+<li>固定長・履歴（系列出力）が必要 → <code>scan</code></li>
+<li>固定長・履歴不要 → <code>fori_loop</code></li>
+</ul>
+<p>いずれの場合も、
+- carry の構造・各葉の shape/dtype を不変にする
+- 分岐は <code>lax.cond</code>、繰り返しは <code>scan/while_loop/fori_loop</code>
+- 早期停止を固定長でエミュレートしたい場合は mask を用意する
+といった JAX のお作法を守ると、JIT/自動微分と相性よく動作します。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "toc.integrate"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
