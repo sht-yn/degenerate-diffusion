@@ -1,233 +1,397 @@
-"""JAX-native parameter estimation utilities."""
+"""JAX-native estimation kernels (builder style) for alternating assembly.
+
+English: Pure JAX kernels returned by builders to be composed into alternating M/B schemes.
+Japanese: 交互推定 (M/B) に合成しやすいよう、ビルダーが返す純 JAX カーネル群。
+"""
 
 from __future__ import annotations
 
-import math
-from collections.abc import Callable, Sequence
+# isort: skip_file
 
+from collections.abc import Callable, Sequence
+from typing import Any, TYPE_CHECKING, cast
+
+import blackjax
 import jax
 import jax.numpy as jnp
-import numpy as np
-import numpyro
-import numpyro.distributions as dist
 import optax
-from numpyro import infer
-from numpyro.distributions import transforms
-from numpyro.infer import init_to_sample
+
+if TYPE_CHECKING:  # pragma: no cover - type-only import
+    from blackjax.base import SamplingState
+else:  # pragma: no cover - runtime fallback
+    SamplingState = Any
+
+
+# Public API
+__all__ = [
+    "build_b",
+    "build_m",
+    "build_s",
+]
+
+
+# Type aliases
+JaxArray = jax.Array
+Bounds = Sequence[tuple[float | None, float | None]]
+Aux = Any  # PyTree expected; numeric leaves only
+ObjectiveFn = Callable[[JaxArray, Aux], JaxArray]  # maximize (scalar)
+DerivativeFn = Callable[[JaxArray], JaxArray]
+# Removed closed-over logprob transition API; only aux-based sampler is public
+
 
 PAIR_LENGTH = 2
 
-Bounds = Sequence[tuple[float | None, float | None]]
-Array1D = jnp.ndarray
 
+def _normalize_bounds(search_bounds: Bounds) -> JaxArray:
+    """Normalize possibly-None bounds into a JAX array of shape (d, 2).
 
-def _normalize_bounds(search_bounds: Bounds) -> jnp.ndarray:
-    if not isinstance(search_bounds, Sequence):
-        msg = "search_bounds must be a sequence of (low, high) tuples."
-        raise TypeError(msg)
-
-    bounds_list: list[tuple[float, float]] = []
+    English: Replace None with +/-inf and return as JAX array.
+    Japanese: None を無限大に置換し、形状 (d,2) の JAX 配列に整形して返す。
+    """
+    lows: list[float] = []
+    highs: list[float] = []
     for idx, bound in enumerate(search_bounds):
         if not isinstance(bound, tuple) or len(bound) != PAIR_LENGTH:
             msg = f"Bound at index {idx} must be a (low, high) tuple."
             raise ValueError(msg)
         low, high = bound
-        low_f = -math.inf if low is None else float(low)
-        high_f = math.inf if high is None else float(high)
+        low_f = float("-inf") if low is None else float(low)
+        high_f = float("inf") if high is None else float(high)
         if low_f > high_f:
             msg = f"Lower bound {low_f} exceeds upper bound {high_f} at index {idx}."
             raise ValueError(msg)
-        bounds_list.append((low_f, high_f))
-    return jnp.asarray(bounds_list)
+        lows.append(low_f)
+        highs.append(high_f)
+    return jnp.stack([jnp.asarray(lows), jnp.asarray(highs)], axis=1)
 
 
-def _clip(theta: Array1D, bounds: jnp.ndarray) -> Array1D:
-    lows = bounds[:, 0]
-    highs = bounds[:, 1]
-    return jnp.clip(theta, lows, highs)
+def _clip_to_bounds(theta: JaxArray, bounds: JaxArray) -> JaxArray:
+    """Project theta into [low, high] box constraints using jnp.clip."""
+    return jnp.clip(theta, bounds[:, 0], bounds[:, 1])
 
 
-def newton_solve(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
+def _prepare_theta_and_bounds(theta: JaxArray, bounds_arr: JaxArray) -> tuple[JaxArray, JaxArray]:
+    """Cast theta to JAX array and align bounds dtype with theta."""
+    theta_arr = jnp.asarray(theta)
+    return theta_arr, bounds_arr.astype(theta_arr.dtype)
+
+
+def _make_objective_derivatives(
+    objective_fn: ObjectiveFn,
+    aux: Aux,
+) -> tuple[DerivativeFn, DerivativeFn]:
+    """Wrap objective_fn to ensure JAX types and return grad/hess callables."""
+
+    def obj(th: JaxArray) -> JaxArray:
+        return jnp.asarray(objective_fn(th, aux))
+
+    grad_fn = cast("DerivativeFn", jax.grad(obj))
+    hess_fn = cast("DerivativeFn", jax.hessian(obj))
+    return grad_fn, hess_fn
+
+
+def _projected_newton_update(
+    theta: JaxArray,
+    grad: JaxArray,
+    hess_sym: JaxArray,
     *,
-    max_iters: int = 10000,
+    damping: float,
+    eps: float,
+    eye: JaxArray,
+    bounds: JaxArray,
+) -> JaxArray:
+    """Apply a damped Newton ascent step followed by box projection."""
+    hess_safe = hess_sym - eps * eye
+    delta = jnp.linalg.solve(hess_safe, grad)
+    theta_next = theta - damping * delta
+    return _clip_to_bounds(theta_next, bounds)
+
+
+def build_s(
+    objective_fn: ObjectiveFn,
+    bounds: Bounds | JaxArray,
+    *,
+    damping: float = 0.1,
+    eps: float = 1e-8,
+) -> Callable[[JaxArray, Aux], JaxArray]:
+    """Build a single Newton-like ascent step: (theta, aux) -> theta_next.
+
+    English: One damped Newton ascent step with Hessian stabilization and box projection.
+    Japanese: 減衰付きニュートン上昇を 1 回行い、ヘッセ安定化とボックス射影を適用する。
+    """
+    bounds_arr = _normalize_bounds(bounds) if not isinstance(bounds, jax.Array) else bounds
+
+    def step(theta: JaxArray, aux: Aux) -> JaxArray:
+        theta_arr, bounds_cast = _prepare_theta_and_bounds(theta, bounds_arr)
+        eye = jnp.eye(theta_arr.shape[0], dtype=theta_arr.dtype)
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
+        grad = grad_fn(theta_arr)
+        hess = hess_fn(theta_arr)
+        hess_sym = 0.5 * (hess + hess.T)
+        return _projected_newton_update(
+            theta_arr,
+            grad,
+            hess_sym,
+            damping=damping,
+            eps=eps,
+            eye=eye,
+            bounds=bounds_cast,
+        )
+
+    return jax.jit(step)
+
+
+def _newton_only_solver_factory(
+    objective_fn: ObjectiveFn,
+    bounds_arr: JaxArray,
+    max_iters: int,
+    tol: float,
+    damping: float,
+    eps: float,
+) -> Callable[[JaxArray, Aux], JaxArray]:
+    def solver(theta0: JaxArray, aux: Aux) -> JaxArray:
+        theta0_arr, bounds_cast = _prepare_theta_and_bounds(theta0, bounds_arr)
+        eye = jnp.eye(theta0_arr.shape[0], dtype=theta0_arr.dtype)
+        false_flag = jnp.zeros((), dtype=jnp.bool_)
+
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
+
+        def cond(carry: tuple[JaxArray, JaxArray, JaxArray]) -> JaxArray:
+            _th, it, converged = carry
+            return jnp.logical_and(it < max_iters, jnp.logical_not(converged))
+
+        def body(
+            carry: tuple[JaxArray, JaxArray, JaxArray],
+        ) -> tuple[JaxArray, JaxArray, JaxArray]:
+            th, it, _ = carry
+            g = grad_fn(th)
+            H = hess_fn(th)
+            grad_norm = jnp.linalg.norm(g)
+            converged_now = grad_norm <= tol
+            H_sym = 0.5 * (H + H.T)
+            th_next = _projected_newton_update(
+                th,
+                g,
+                H_sym,
+                damping=damping,
+                eps=eps,
+                eye=eye,
+                bounds=bounds_cast,
+            )
+            return th_next, it + 1, converged_now
+
+        th_fin, _it_fin, _cv_fin = jax.lax.while_loop(
+            cond,
+            body,
+            (theta0_arr, jnp.asarray(0, dtype=jnp.int32), false_flag),
+        )
+        return th_fin
+
+    return jax.jit(solver)
+
+
+def _newton_with_adam_solver_factory(
+    objective_fn: ObjectiveFn,
+    bounds_arr: JaxArray,
+    max_iters: int,
+    tol: float,
+    damping: float,
+    learning_rate: float,
+    weight_decay: float,
+    clip_norm: float,
+    eps: float,
+) -> Callable[[JaxArray, Aux], JaxArray]:
+    adam = optax.adamw(learning_rate=learning_rate, weight_decay=weight_decay)
+    optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), adam)
+
+    def solver(theta0: JaxArray, aux: Aux) -> JaxArray:
+        theta0_arr, bounds_cast = _prepare_theta_and_bounds(theta0, bounds_arr)
+        eye = jnp.eye(theta0_arr.shape[0], dtype=theta0_arr.dtype)
+        false_flag = jnp.zeros((), dtype=jnp.bool_)
+
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
+
+        opt_state0 = optimizer.init(theta0_arr)
+
+        def cond(
+            carry: tuple[JaxArray, optax.OptState, JaxArray, JaxArray],
+        ) -> JaxArray:
+            _th, _st, it, converged = carry
+            return jnp.logical_and(it < max_iters, jnp.logical_not(converged))
+
+        def body(
+            carry: tuple[JaxArray, optax.OptState, JaxArray, JaxArray],
+        ) -> tuple[JaxArray, optax.OptState, JaxArray, JaxArray]:
+            th, st, it, _ = carry
+            g = grad_fn(th)
+            H = hess_fn(th)
+            grad_norm = jnp.linalg.norm(g)
+            converged_now = grad_norm <= tol
+
+            H_sym = 0.5 * (H + H.T)
+            max_eig = jnp.max(jnp.linalg.eigvalsh(H_sym))
+            use_newton = max_eig < 0.0
+
+            def do_newton(
+                cur: tuple[JaxArray, optax.OptState],
+            ) -> tuple[JaxArray, optax.OptState]:
+                t, s = cur
+                t_next = _projected_newton_update(
+                    t,
+                    g,
+                    H_sym,
+                    damping=damping,
+                    eps=eps,
+                    eye=eye,
+                    bounds=bounds_cast,
+                )
+                return t_next, s
+
+            def do_adam(
+                cur: tuple[JaxArray, optax.OptState],
+            ) -> tuple[JaxArray, optax.OptState]:
+                t, s = cur
+                update, s_next = optimizer.update(-g, s, t)
+                t_next = optax.apply_updates(t, update)
+                return t_next, s_next
+
+            th_next, st_next = jax.lax.cond(use_newton, do_newton, do_adam, (th, st))
+            th_next = _clip_to_bounds(th_next, bounds_cast)
+            return th_next, st_next, it + 1, converged_now
+
+        th_fin, _st_fin, _it_fin, _cv_fin = jax.lax.while_loop(
+            cond,
+            body,
+            (theta0_arr, opt_state0, jnp.asarray(0, dtype=jnp.int32), false_flag),
+        )
+        return th_fin
+
+    return jax.jit(solver)
+
+
+def build_m(
+    objective_fn: ObjectiveFn,
+    bounds: Bounds | JaxArray,
+    *,
+    max_iters: int = 10_000,
     tol: float = 1e-7,
     damping: float = 0.1,
-    log_interval: int | None = None,
-    fallback_learning_rate: float = 1e-5,
-    fallback_weight_decay: float = 0.0,
+    use_adam_fallback: bool = True,
+    learning_rate: float = 1e-5,
+    weight_decay: float = 0.0,
     clip_norm: float = 1e2,
-) -> np.ndarray:
-    """Solve the estimating equation ``∇θ V(θ) = 0`` via a multidimensional Newton method.
+    eps: float = 1e-8,
+) -> Callable[[JaxArray, Aux], JaxArray]:
+    """Build a damped Newton ascent solver, with optional AdamW fallback.
 
-    多次元ニュートン法で推定方程式 ``∇θ V(θ) = 0`` を解く。``damping`` を 1 未満にすると過大
-    ステップを抑えられる。解が境界の外に出そうな場合でも ``_clip`` で常に ``search_bounds``
-    内に戻す。
+    English: Returns (theta0, aux) -> theta_hat using lax.while_loop to enforce
+    ||grad||<=tol.
+    Japanese: ||grad||<=tol になるまで lax.while_loop で反復する上昇ソルバを返す。
     """
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta = jnp.asarray(initial_guess)
-    if theta.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
+    bounds_arr = _normalize_bounds(bounds) if not isinstance(bounds, jax.Array) else bounds
 
-    bounds = bounds_raw.astype(theta.dtype)
+    if use_adam_fallback:
+        return _newton_with_adam_solver_factory(
+            objective_fn,
+            bounds_arr,
+            max_iters,
+            tol,
+            damping,
+            learning_rate,
+            weight_decay,
+            clip_norm,
+            eps,
+        )
 
-    if fallback_learning_rate <= 0.0:
-        msg = "fallback_learning_rate must be positive."
-        raise ValueError(msg)
-    if clip_norm <= 0.0:
-        msg = "clip_norm must be positive."
-        raise ValueError(msg)
-
-    adamw_transform = optax.adamw(
-        learning_rate=fallback_learning_rate,
-        weight_decay=fallback_weight_decay,
+    return _newton_only_solver_factory(
+        objective_fn,
+        bounds_arr,
+        max_iters,
+        tol,
+        damping,
+        eps,
     )
-    optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), adamw_transform)
-    opt_state = optimizer.init(theta)
-
-    def grad_and_hessian(theta_val: Array1D) -> tuple[Array1D, jnp.ndarray]:
-        grad_val = jax.grad(objective_function)(theta_val)
-        hessian_val = jax.hessian(objective_function)(theta_val)
-        return grad_val, hessian_val
-
-    eps = 1e-8
-
-    for iteration in range(1, max_iters + 1):
-        grad_val, hessian_val = grad_and_hessian(theta)
-        grad_norm = float(jnp.linalg.norm(grad_val))
-        if log_interval and iteration % log_interval == 0:
-            print(f"[newton_solve] iter={iteration} grad_norm={grad_norm:.3e} theta={theta}")
-        if grad_norm <= tol:
-            break
-
-        eye = jnp.eye(theta.shape[0])
-        hessian_sym = 0.5 * (hessian_val + hessian_val.T)
-        eigvals = jnp.linalg.eigvalsh(hessian_sym)
-        max_eig = jnp.max(eigvals)
-        all_negative = max_eig < 0
-
-        opt_update, opt_state_candidate = optimizer.update(-grad_val, opt_state, theta)
-
-        if all_negative:
-            # Newton ステップ (自然勾配) を実行。数値安定化のため微小対角成分を加える。
-            hessian_safe = hessian_sym - eps * eye
-            delta = jnp.linalg.solve(hessian_safe, grad_val)
-            theta = theta - damping * delta
-            opt_state = opt_state_candidate
-        else:
-            # 曲率が反転している場合は一次法にフォールバック。
-            if log_interval and iteration % log_interval == 0:
-                print("  -> fallback to AdamW step with gradient clipping (indefinite Hessian)")
-            theta = optax.apply_updates(theta, opt_update)
-            opt_state = opt_state_candidate
-
-        theta = _clip(theta, bounds)
-
-    return np.asarray(theta)
 
 
-def one_step_estimate(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_estimator: Sequence[float],
-) -> np.ndarray:
-    """Single Newton step using JAX gradients and Hessians."""
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_estimator)
-
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_estimator must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
-
-    bounds = bounds_raw.astype(theta0.dtype)
-
-    grad = jax.grad(objective_function)(theta0)
-    hessian = jax.hessian(objective_function)(theta0)
-
-    eye = jnp.eye(theta0.shape[0])
-    hessian_safe = hessian + 1e-8 * eye
-    delta = jnp.linalg.solve(hessian_safe, grad)
-    theta_new = theta0 - delta
-    theta_new = _clip(theta_new, bounds)
-    return np.asarray(theta_new)
+# (removed) build_bayes_transition: use aux-based internals only; inline transition in sampler
 
 
-def _prior_from_bounds(low: float, high: float) -> dist.Distribution:
-    if math.isfinite(low) and math.isfinite(high):
-        return dist.Uniform(low, high)
-    if math.isfinite(low):
-        return dist.TransformedDistribution(
-            dist.Exponential(1.0), transforms.AffineTransform(low, 1.0)
-        )
-    if math.isfinite(high):
-        return dist.TransformedDistribution(
-            dist.Exponential(1.0),
-            transforms.AffineTransform(high, -1.0),
-        )
-    return dist.Normal(0.0, 10.0)
-
-
-def bayes_estimate(
-    objective_function: Callable[[Array1D], float],
-    search_bounds: Bounds,
-    initial_guess: Sequence[float],
+def build_b(
+    logprob_fn: Callable[[JaxArray, Aux], JaxArray],
     *,
-    prior_log_pdf: Callable[[Array1D], float] | None = None,
+    step_size: float = 1e-1,
+    inverse_mass_matrix: JaxArray | None = None,
     num_warmup: int = 1000,
     num_samples: int = 3000,
-    num_chains: int = 1,
-    rng_seed: int = 0,
-    init_strategy: Callable[..., object] | None = None,
-) -> np.ndarray:
-    """Bayesian estimation via NumPyro and JAX."""
-    bounds_raw = _normalize_bounds(search_bounds)
-    theta0 = jnp.asarray(initial_guess)
+    thin: int = 1,
+    target_acceptance_rate: float = 0.75,
+) -> Callable[[JaxArray, JaxArray, Aux], JaxArray]:
+    """Build a NUTS sampler that returns the mean of posterior draws.
 
-    if theta0.shape != (bounds_raw.shape[0],):
-        msg = f"initial_guess must have shape ({bounds_raw.shape[0]},)."
-        raise ValueError(msg)
+    (theta0, key, aux) -> theta_mean
+    - Assumes the new BlackJAX API: pass step_size and inverse_mass_matrix when
+      constructing the kernel; call nuts.step(key, state) without extra kwargs.
+      Optional thinning via `thin`.
+    """
+    num_warmup_i = int(num_warmup)
+    num_samples_i = int(num_samples)
+    thin_i = int(max(thin, 1))
 
-    bounds = bounds_raw.astype(theta0.dtype)
-    bounds_np = np.asarray(bounds)
+    def run(theta0: JaxArray, key: JaxArray, aux: Aux) -> JaxArray:
+        theta0 = jnp.asarray(theta0)
 
-    def model() -> None:
-        theta_components = []
-        for i in range(bounds_np.shape[0]):
-            low = float(bounds_np[i, 0])
-            high = float(bounds_np[i, 1])
-            prior = _prior_from_bounds(low, high)
-            theta_i = numpyro.sample(f"theta_{i}", prior)
-            theta_components.append(theta_i)
-        theta = jnp.stack(theta_components)
-        log_like = jnp.asarray(objective_function(theta))
-        numpyro.factor("log_likelihood", log_like)
-        if prior_log_pdf is not None:
-            numpyro.factor("user_prior", jnp.asarray(prior_log_pdf(theta)))
-        numpyro.deterministic("theta", theta)
+        def logprob(th: JaxArray) -> JaxArray:
+            return jnp.asarray(logprob_fn(th, aux))
 
-    strategy = init_strategy or init_to_sample()
-    nuts_kernel = infer.NUTS(model, init_strategy=strategy)
-    mcmc = infer.MCMC(
-        nuts_kernel,
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-        num_chains=num_chains,
-        progress_bar=False,
-    )
-    rng_key = jax.random.PRNGKey(rng_seed)
-    mcmc.run(rng_key)
-    samples = mcmc.get_samples()
-    theta_components = [samples[f"theta_{i}"] for i in range(bounds.shape[0])]
-    theta_stack = jnp.stack(theta_components, axis=-1)
-    posterior_mean = jnp.mean(theta_stack, axis=0)
-    return np.asarray(posterior_mean)
+        def _thin_transition(
+            carry: tuple[SamplingState, JaxArray],
+            _i: JaxArray,
+        ) -> tuple[tuple[SamplingState, JaxArray], None]:
+            st, k_cur = carry
+            k_cur, k_use = jax.random.split(k_cur)
+            st_new, _info = nuts.step(k_use, st)
+            return (st_new, k_cur), None
 
+        def _sample_transition(
+            carry: tuple[SamplingState, JaxArray],
+            _i: JaxArray,
+        ) -> tuple[tuple[SamplingState, JaxArray], JaxArray]:
+            st, k_cur = carry
+            (st_new, k_after), _ = jax.lax.scan(
+                _thin_transition,
+                (st, k_cur),
+                jnp.arange(thin_i),
+            )
+            return (st_new, k_after), st_new.position
 
-__all__ = [
-    "bayes_estimate",
-    "newton_solve",
-    "one_step_estimate",
-]
+        has_user_metric = inverse_mass_matrix is not None
+        metric_init = jnp.ones_like(theta0) if inverse_mass_matrix is None else inverse_mass_matrix
+
+        if num_warmup_i > 0 and not has_user_metric:
+            warmup_algo = blackjax.window_adaptation(
+                blackjax.nuts,
+                logprob,
+                initial_step_size=step_size,
+                target_acceptance_rate=target_acceptance_rate,
+            )
+            key_warmup, key_samples = jax.random.split(key)
+            warmup_result, _adapt_info = warmup_algo.run(key_warmup, theta0, num_warmup_i)
+            tuned_params = warmup_result.parameters
+            tuned_step = tuned_params["step_size"]
+            tuned_metric = tuned_params["inverse_mass_matrix"]
+            nuts = blackjax.nuts(logprob, step_size=tuned_step, inverse_mass_matrix=tuned_metric)
+            state_init = warmup_result.state
+            key_use = key_samples
+        else:
+            nuts = blackjax.nuts(logprob, step_size=step_size, inverse_mass_matrix=metric_init)
+            state_init = nuts.init(theta0)
+            key_use = key
+
+        (_, _), samples = jax.lax.scan(
+            _sample_transition,
+            (state_init, key_use),
+            jnp.arange(num_samples_i),
+        )
+        return jnp.mean(samples, axis=0)
+
+    return jax.jit(run)

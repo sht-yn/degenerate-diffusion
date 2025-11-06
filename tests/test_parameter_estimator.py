@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from degenerate_diffusion.estimation.parameter_estimator_new import (
+from degenerate_diffusion.estimation.parameter_estimator import (
     build_b,
     build_m,
     build_s,
