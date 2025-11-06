@@ -12,8 +12,8 @@ import pytest
 
 from degenerate_diffusion.estimation.parameter_estimator_new import (
     build_b,
-    build_newton_ascent_solver,
-    build_one_step_ascent,
+    build_m,
+    build_s,
 )
 
 
@@ -51,7 +51,7 @@ def test_newton_solver_converges_to_mu() -> None:
 
     bounds = [(-math.inf, math.inf)] * dim  # 制約なし相当
 
-    solver = build_newton_ascent_solver(
+    solver = build_m(
         objective, bounds, max_iters=50, tol=1e-10, damping=1.0, use_adam_fallback=False
     )
     theta0 = jnp.zeros((dim,))
@@ -67,8 +67,8 @@ def test_one_step_equals_solver_single_iter() -> None:
     objective = _concave_quadratic(mu, A)
     bounds = [(-math.inf, math.inf)] * dim
 
-    step = build_one_step_ascent(objective, bounds, damping=1.0, eps=1e-9)
-    solver_1 = build_newton_ascent_solver(
+    step = build_s(objective, bounds, damping=1.0, eps=1e-9)
+    solver_1 = build_m(
         objective, bounds, max_iters=1, tol=0.0, damping=1.0, use_adam_fallback=False
     )
     theta0 = jnp.array([10.0, 10.0])
@@ -87,7 +87,7 @@ def test_bounds_clipping_projects_into_box() -> None:
     # 境界を [-1, 1] に固定
     bounds = [(-1.0, 1.0)] * dim
 
-    step = build_one_step_ascent(objective, bounds, damping=1.0)
+    step = build_s(objective, bounds, damping=1.0)
     theta0 = jnp.array([0.5, -0.5])
 
     theta_next = step(theta0, None)

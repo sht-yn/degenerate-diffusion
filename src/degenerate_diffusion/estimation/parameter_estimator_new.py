@@ -21,8 +21,6 @@ import optax
 __all__ = [
     "build_b",
     "build_m",
-    "build_newton_ascent_solver",
-    "build_one_step_ascent",
     "build_s",
 ]
 
@@ -32,6 +30,7 @@ JaxArray = jax.Array
 Bounds = Sequence[tuple[float | None, float | None]]
 Aux = Any  # PyTree expected; numeric leaves only
 ObjectiveFn = Callable[[JaxArray, Aux], JaxArray]  # maximize (scalar)
+DerivativeFn = Callable[[JaxArray], JaxArray]
 # Removed closed-over logprob transition API; only aux-based sampler is public
 
 
@@ -66,7 +65,44 @@ def _clip_to_bounds(theta: JaxArray, bounds: JaxArray) -> JaxArray:
     return jnp.clip(theta, bounds[:, 0], bounds[:, 1])
 
 
-def build_one_step_ascent(
+def _prepare_theta_and_bounds(theta: JaxArray, bounds_arr: JaxArray) -> tuple[JaxArray, JaxArray]:
+    """Cast theta to JAX array and align bounds dtype with theta."""
+    theta_arr = jnp.asarray(theta)
+    return theta_arr, bounds_arr.astype(theta_arr.dtype)
+
+
+def _make_objective_derivatives(
+    objective_fn: ObjectiveFn,
+    aux: Aux,
+) -> tuple[DerivativeFn, DerivativeFn]:
+    """Wrap objective_fn to ensure JAX types and return grad/hess callables."""
+
+    def obj(th: JaxArray) -> JaxArray:
+        return jnp.asarray(objective_fn(th, aux))
+
+    grad_fn = cast("DerivativeFn", jax.grad(obj))
+    hess_fn = cast("DerivativeFn", jax.hessian(obj))
+    return grad_fn, hess_fn
+
+
+def _projected_newton_update(
+    theta: JaxArray,
+    grad: JaxArray,
+    hess_sym: JaxArray,
+    *,
+    damping: float,
+    eps: float,
+    eye: JaxArray,
+    bounds: JaxArray,
+) -> JaxArray:
+    """Apply a damped Newton ascent step followed by box projection."""
+    hess_safe = hess_sym - eps * eye
+    delta = jnp.linalg.solve(hess_safe, grad)
+    theta_next = theta - damping * delta
+    return _clip_to_bounds(theta_next, bounds)
+
+
+def build_s(
     objective_fn: ObjectiveFn,
     bounds: Bounds | JaxArray,
     *,
@@ -81,21 +117,21 @@ def build_one_step_ascent(
     bounds_arr = _normalize_bounds(bounds) if not isinstance(bounds, jax.Array) else bounds
 
     def step(theta: JaxArray, aux: Aux) -> JaxArray:
-        theta = jnp.asarray(theta)
-        b = bounds_arr.astype(theta.dtype)
-
-        def obj(th: JaxArray) -> JaxArray:
-            return jnp.asarray(objective_fn(th, aux))
-
-        grad = jax.grad(obj)(theta)
-        hess = jax.hessian(obj)(theta)
+        theta_arr, bounds_cast = _prepare_theta_and_bounds(theta, bounds_arr)
+        eye = jnp.eye(theta_arr.shape[0], dtype=theta_arr.dtype)
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
+        grad = grad_fn(theta_arr)
+        hess = hess_fn(theta_arr)
         hess_sym = 0.5 * (hess + hess.T)
-        eye = jnp.eye(theta.shape[0], dtype=theta.dtype)
-        hess_safe = hess_sym - eps * eye
-        # Newton ascent: theta <- theta - damping * inv(H) * grad
-        delta = jnp.linalg.solve(hess_safe, grad)
-        theta_next = theta - damping * delta
-        return _clip_to_bounds(theta_next, b)
+        return _projected_newton_update(
+            theta_arr,
+            grad,
+            hess_sym,
+            damping=damping,
+            eps=eps,
+            eye=eye,
+            bounds=bounds_cast,
+        )
 
     return jax.jit(step)
 
@@ -109,21 +145,11 @@ def _newton_only_solver_factory(
     eps: float,
 ) -> Callable[[JaxArray, Aux], JaxArray]:
     def solver(theta0: JaxArray, aux: Aux) -> JaxArray:
-        theta0 = jnp.asarray(theta0)
-        b = bounds_arr.astype(theta0.dtype)
-        eye = jnp.eye(theta0.shape[0], dtype=theta0.dtype)
+        theta0_arr, bounds_cast = _prepare_theta_and_bounds(theta0, bounds_arr)
+        eye = jnp.eye(theta0_arr.shape[0], dtype=theta0_arr.dtype)
         false_flag = jnp.zeros((), dtype=jnp.bool_)
 
-        def obj(th: JaxArray) -> JaxArray:
-            return jnp.asarray(objective_fn(th, aux))
-
-        def grad_val(th: JaxArray) -> JaxArray:
-            # jax.grad has incomplete type info; cast to JaxArray for mypy
-            return cast("JaxArray", jax.grad(obj)(th))
-
-        def hess_val(th: JaxArray) -> JaxArray:
-            # jax.hessian has incomplete type info; cast to JaxArray for mypy
-            return cast("JaxArray", jax.hessian(obj)(th))
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
 
         def cond(carry: tuple[JaxArray, JaxArray, JaxArray]) -> JaxArray:
             _th, it, converged = carry
@@ -133,20 +159,26 @@ def _newton_only_solver_factory(
             carry: tuple[JaxArray, JaxArray, JaxArray],
         ) -> tuple[JaxArray, JaxArray, JaxArray]:
             th, it, _ = carry
-            g = grad_val(th)
-            H = hess_val(th)
+            g = grad_fn(th)
+            H = hess_fn(th)
             grad_norm = jnp.linalg.norm(g)
             converged_now = grad_norm <= tol
             H_sym = 0.5 * (H + H.T)
-            H_safe = H_sym - eps * eye
-            delta = jnp.linalg.solve(H_safe, g)
-            th_next = _clip_to_bounds(th - damping * delta, b)
+            th_next = _projected_newton_update(
+                th,
+                g,
+                H_sym,
+                damping=damping,
+                eps=eps,
+                eye=eye,
+                bounds=bounds_cast,
+            )
             return th_next, it + 1, converged_now
 
         th_fin, _it_fin, _cv_fin = jax.lax.while_loop(
             cond,
             body,
-            (theta0, jnp.asarray(0, dtype=jnp.int32), false_flag),
+            (theta0_arr, jnp.asarray(0, dtype=jnp.int32), false_flag),
         )
         return th_fin
 
@@ -168,21 +200,13 @@ def _newton_with_adam_solver_factory(
     optimizer = optax.chain(optax.clip_by_global_norm(clip_norm), adam)
 
     def solver(theta0: JaxArray, aux: Aux) -> JaxArray:
-        theta0 = jnp.asarray(theta0)
-        b = bounds_arr.astype(theta0.dtype)
-        eye = jnp.eye(theta0.shape[0], dtype=theta0.dtype)
+        theta0_arr, bounds_cast = _prepare_theta_and_bounds(theta0, bounds_arr)
+        eye = jnp.eye(theta0_arr.shape[0], dtype=theta0_arr.dtype)
         false_flag = jnp.zeros((), dtype=jnp.bool_)
 
-        def obj(th: JaxArray) -> JaxArray:
-            return jnp.asarray(objective_fn(th, aux))
+        grad_fn, hess_fn = _make_objective_derivatives(objective_fn, aux)
 
-        def grad_val(th: JaxArray) -> JaxArray:
-            return cast("JaxArray", jax.grad(obj)(th))
-
-        def hess_val(th: JaxArray) -> JaxArray:
-            return cast("JaxArray", jax.hessian(obj)(th))
-
-        opt_state0 = optimizer.init(theta0)
+        opt_state0 = optimizer.init(theta0_arr)
 
         def cond(
             carry: tuple[JaxArray, optax.OptState, JaxArray, JaxArray],
@@ -194,8 +218,8 @@ def _newton_with_adam_solver_factory(
             carry: tuple[JaxArray, optax.OptState, JaxArray, JaxArray],
         ) -> tuple[JaxArray, optax.OptState, JaxArray, JaxArray]:
             th, st, it, _ = carry
-            g = grad_val(th)
-            H = hess_val(th)
+            g = grad_fn(th)
+            H = hess_fn(th)
             grad_norm = jnp.linalg.norm(g)
             converged_now = grad_norm <= tol
 
@@ -207,9 +231,15 @@ def _newton_with_adam_solver_factory(
                 cur: tuple[JaxArray, optax.OptState],
             ) -> tuple[JaxArray, optax.OptState]:
                 t, s = cur
-                H_safe = H_sym - eps * eye
-                delta = jnp.linalg.solve(H_safe, g)
-                t_next = t - damping * delta
+                t_next = _projected_newton_update(
+                    t,
+                    g,
+                    H_sym,
+                    damping=damping,
+                    eps=eps,
+                    eye=eye,
+                    bounds=bounds_cast,
+                )
                 return t_next, s
 
             def do_adam(
@@ -221,20 +251,20 @@ def _newton_with_adam_solver_factory(
                 return t_next, s_next
 
             th_next, st_next = jax.lax.cond(use_newton, do_newton, do_adam, (th, st))
-            th_next = _clip_to_bounds(th_next, b)
+            th_next = _clip_to_bounds(th_next, bounds_cast)
             return th_next, st_next, it + 1, converged_now
 
         th_fin, _st_fin, _it_fin, _cv_fin = jax.lax.while_loop(
             cond,
             body,
-            (theta0, opt_state0, jnp.asarray(0, dtype=jnp.int32), false_flag),
+            (theta0_arr, opt_state0, jnp.asarray(0, dtype=jnp.int32), false_flag),
         )
         return th_fin
 
     return jax.jit(solver)
 
 
-def build_newton_ascent_solver(
+def build_m(
     objective_fn: ObjectiveFn,
     bounds: Bounds | JaxArray,
     *,
@@ -281,13 +311,13 @@ def build_newton_ascent_solver(
 # (removed) build_bayes_transition: use aux-based internals only; inline transition in sampler
 
 
-def build_bayes_sampler_with_aux(
+def build_b(
     logprob_fn: Callable[[JaxArray, Aux], JaxArray],
     *,
     step_size: float = 1e-1,
     inverse_mass_matrix: JaxArray | None = None,
     num_warmup: int = 500,
-    num_samples: int = 1000,
+    num_samples: int = 2000,
     thin: int = 1,
 ) -> Callable[[JaxArray, JaxArray, Aux], JaxArray]:
     """Build a NUTS sampler that returns the mean of posterior draws.
@@ -348,11 +378,3 @@ def build_bayes_sampler_with_aux(
         return jnp.mean(samples, axis=0)
 
     return jax.jit(run)
-
-
-# Friendly aliases to align names with estimator kinds (M/B/S).
-# Prefer build_b (aux sampler, returns mean). Aux-based transition is internal-only.
-build_m = build_newton_ascent_solver
-build_s = build_one_step_ascent
-build_b = build_bayes_sampler_with_aux
-# (removed) build_b_step, build_b_closed

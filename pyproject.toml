@@ -9,10 +9,10 @@ dependencies = [
     "cloudpickle~=3.1",
     "jax~=0.8",
     "jaxlib~=0.8",
-    "jaxopt~=0.8",
     "numpy~=2.3",
     "numpyro~=0.19",
     "optax~=0.2",
+    "pre-commit>=4.3.0",
     "sympy~=1.14",
     "tqdm~=4.67",
 ]

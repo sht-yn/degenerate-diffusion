@@ -27,3 +27,4 @@ nav:
   - Optax Basics (JA): optax_basics_ja.md
   - Parameter Estimator Usage: parameter_estimator_usage.md
   - UV Workspace Setup: uv_workspace_setup.md
+  - BlackJax: blackjax_nuts_usage.md
