@@ -10,7 +10,6 @@ that can be jitted and later vmapped over seeds.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -20,11 +19,14 @@ import jax.numpy as jnp
 from degenerate_diffusion.estimation.parameter_estimator_new import (
     Bounds as JaxBounds,
     JaxArray,
-    _normalize_bounds,
-    build_bayes_transition,
+    build_b,
+    build_m,
+    build_s,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - type-only imports
+    from collections.abc import Callable, Mapping
+
     from degenerate_diffusion.evaluation.likelihood_evaluator import (
         LikelihoodEvaluator,
     )
@@ -38,7 +40,66 @@ EstimatorKind = Literal["M", "B", "S"]
 
 # Shorthand for 3-parameter tuple
 ThetaTriple = tuple[JaxArray, JaxArray, JaxArray]
-BranchRunner = Callable[[JaxArray, JaxArray], JaxArray]
+
+
+@dataclass(frozen=True)
+class ComponentSolvers:
+    """Bundle of per-kind solvers for a single theta component.
+
+    m: (theta, aux) -> theta
+    s: (theta, aux) -> theta
+    b: (theta, key, aux) -> theta  (Bayesian sampler returning mean)
+    """
+
+    m: Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray]
+    s: Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray]
+    b: Callable[
+        [JaxArray, JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray
+    ]
+
+
+def _build_component_solvers(
+    objective_with_aux: Callable[
+        [JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray
+    ],
+    bounds: JaxBounds,
+    *,
+    newton_kwargs: Mapping[str, object],
+    one_step_kwargs: Mapping[str, object],
+    nuts_kwargs: Mapping[str, object],
+) -> ComponentSolvers:
+    """Construct M/S/B solvers for a single component from config and objective.
+
+    Returns a ComponentSolvers bundle with .m/.s/.b callables.
+    """
+    m = build_m(
+        objective_with_aux,
+        bounds,
+        max_iters=_kw_int(newton_kwargs, "max_iters", 100),
+        tol=_kw_float(newton_kwargs, "tol", 1e-6),
+        damping=_kw_float(newton_kwargs, "damping", 0.1),
+        use_adam_fallback=bool(newton_kwargs.get("use_adam_fallback", True)),
+        learning_rate=_kw_float(newton_kwargs, "learning_rate", 1e-5),
+        weight_decay=_kw_float(newton_kwargs, "weight_decay", 0.0),
+        clip_norm=_kw_float(newton_kwargs, "clip_norm", 1e2),
+        eps=_kw_float(newton_kwargs, "eps", 1e-8),
+    )
+    s = build_s(
+        objective_with_aux,
+        bounds,
+        damping=_kw_float(one_step_kwargs, "damping", 0.1),
+        eps=_kw_float(one_step_kwargs, "eps", 1e-8),
+    )
+    b = build_b(
+        objective_with_aux,
+        step_size=_kw_float(nuts_kwargs, "step_size", 1e-1),
+        inverse_mass_matrix=_kw_jax_array_opt(nuts_kwargs, "inverse_mass_matrix"),
+        num_warmup=_kw_int(nuts_kwargs, "num_warmup", 500),
+        num_samples=_kw_int(nuts_kwargs, "num_samples", 1000),
+        thin=_kw_int(nuts_kwargs, "thin", 1),
+        target_acceptance_rate=_kw_float(nuts_kwargs, "target_acceptance_rate", 0.75),
+    )
+    return ComponentSolvers(m=m, s=s, b=b)
 
 
 def _kw_int(d: Mapping[str, object], key: str, default: int) -> int:
@@ -90,202 +151,84 @@ class SeedRunnerConfig:
     one_step_kwargs: Mapping[str, object]
 
 
-def build_simulator_kernel(
-    model: DegenerateDiffusionProcess,
-    *,
-    t_max: float,
-    h: float,
-    burn_out: float,
-    dt: float,
-) -> Callable[
-    [tuple[JaxArray, JaxArray, JaxArray], JaxArray, JaxArray, JaxArray],
-    tuple[JaxArray, JaxArray],
-]:
-    """Return jitted simulator kernel from the model."""
-    return model.make_simulation_kernel(t_max=t_max, h=h, burn_out=burn_out, dt=dt)
-
-
-def _make_objectives(
-    evaluator: LikelihoodEvaluator,
-    k: int,
-    x_series: JaxArray,
-    y_series: JaxArray,
-    h: float,
-    theta_bar: tuple[JaxArray, JaxArray, JaxArray],
+def _make_objectives_with_aux(
+    branches_l1p: tuple[Callable[..., JaxArray], ...],
+    branches_l1: tuple[Callable[..., JaxArray], ...],
+    branches_l2: tuple[Callable[..., JaxArray], ...],
+    branches_l3: tuple[Callable[..., JaxArray], ...],
 ) -> tuple[
-    Callable[[JaxArray], JaxArray],
-    Callable[[JaxArray], JaxArray],
-    Callable[[JaxArray], JaxArray],
-    Callable[[JaxArray], JaxArray],
+    Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray],
+    Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray],
+    Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray],
+    Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray],
 ]:
-    """Build l1', l1, l2, l3 stateless objectives closed over data and theta_bar."""
-    t1b, t2b, t3b = (
-        jnp.asarray(theta_bar[0]),
-        jnp.asarray(theta_bar[1]),
-        jnp.asarray(theta_bar[2]),
-    )
-    l1p = evaluator.make_stateless_quasi_l1_prime_evaluator(k=k)
-    l1 = evaluator.make_stateless_quasi_l1_evaluator(k=k)
-    l2 = evaluator.make_stateless_quasi_l2_evaluator(k=k)
-    l3 = evaluator.make_stateless_quasi_l3_evaluator(k=k)
+    """Aux-aware objectives selecting k via lax.switch.
 
-    def obj_l1p(th: JaxArray) -> JaxArray:
-        return jnp.asarray(l1p(jnp.asarray(th), t1b, t2b, t3b, x_series, y_series, jnp.asarray(h)))
+    aux = (idx0, theta_bar, x_series, y_series, h_arr)
+    """
 
-    def obj_l1(th: JaxArray) -> JaxArray:
-        return jnp.asarray(l1(jnp.asarray(th), t1b, t2b, t3b, x_series, y_series, jnp.asarray(h)))
+    def wrap(
+        branches: tuple[Callable[..., JaxArray], ...],
+    ) -> Callable[[JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray]:
+        def objective(
+            th: JaxArray,
+            aux: tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray],
+        ) -> JaxArray:
+            idx0, theta_bar, x_series, y_series, h_arr = aux
+            return cast(
+                "JaxArray",
+                jax.lax.switch(
+                    idx0,
+                    branches,
+                    th,
+                    theta_bar[0],
+                    theta_bar[1],
+                    theta_bar[2],
+                    x_series,
+                    y_series,
+                    h_arr,
+                ),
+            )
 
-    def obj_l2(th: JaxArray) -> JaxArray:
-        return jnp.asarray(l2(jnp.asarray(th), t1b, t2b, t3b, x_series, y_series, jnp.asarray(h)))
+        return objective
 
-    def obj_l3(th: JaxArray) -> JaxArray:
-        return jnp.asarray(l3(jnp.asarray(th), t1b, t2b, t3b, x_series, y_series, jnp.asarray(h)))
-
-    return obj_l1p, obj_l1, obj_l2, obj_l3
+    return wrap(branches_l1p), wrap(branches_l1), wrap(branches_l2), wrap(branches_l3)
 
 
-def _build_component_solver(  # noqa: C901, PLR0915
-    kind: EstimatorKind,
-    bounds: JaxBounds,
+# (removed) _unused_placeholder
+
+
+def _run_by_kind(
+    kind_code_scalar: JaxArray,
+    theta0: JaxArray,
+    key: JaxArray,
+    aux: tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray],
     *,
-    newton_kwargs: Mapping[str, object],
-    nuts_kwargs: Mapping[str, object],
-    one_step_kwargs: Mapping[str, object],
-) -> Callable[[JaxArray, Callable[[JaxArray], JaxArray], JaxArray], JaxArray]:
-    """Return (theta0, objective, key) -> theta_hat for a component."""
-    if kind == "M":
-        # Inline Newton ascent to avoid passing Python callables through jit
-        b_arr = _normalize_bounds(bounds)
-        max_iters = _kw_int(newton_kwargs, "max_iters", 100)
-        tol = _kw_float(newton_kwargs, "tol", 1e-6)
-        damping = _kw_float(newton_kwargs, "damping", 0.1)
-        eps = _kw_float(newton_kwargs, "eps", 1e-8)
+    solver_M: Callable[
+        [JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray
+    ],
+    trans_B: Callable[
+        [JaxArray, JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray
+    ],
+    solver_S: Callable[
+        [JaxArray, tuple[JaxArray, ThetaTriple, JaxArray, JaxArray, JaxArray]], JaxArray
+    ],
+) -> JaxArray:
+    """Run one component update by estimator kind.
 
-        def run_m(
-            theta0: JaxArray,
-            objective: Callable[[JaxArray], JaxArray],
-            _key: JaxArray,
-        ) -> JaxArray:
-            theta0 = jnp.asarray(theta0)
-            b = b_arr.astype(theta0.dtype)
-            eye = jnp.eye(theta0.shape[0], dtype=theta0.dtype)
-
-            def obj(th: JaxArray) -> JaxArray:
-                return jnp.asarray(objective(th))
-
-            def grad_val(th: JaxArray) -> JaxArray:
-                return cast("JaxArray", jax.grad(obj)(th))
-
-            def hess_val(th: JaxArray) -> JaxArray:
-                return cast("JaxArray", jax.hessian(obj)(th))
-
-            false_flag = jnp.zeros((), dtype=jnp.bool_)
-
-            def cond(carry: tuple[JaxArray, JaxArray, JaxArray]) -> JaxArray:
-                _th, it, converged = carry
-                return jnp.logical_and(it < max_iters, jnp.logical_not(converged))
-
-            def body(
-                carry: tuple[JaxArray, JaxArray, JaxArray],
-            ) -> tuple[JaxArray, JaxArray, JaxArray]:
-                th, it, _ = carry
-                g = grad_val(th)
-                H = hess_val(th)
-                grad_norm = jnp.linalg.norm(g)
-                converged_now = grad_norm <= tol
-                H_sym = 0.5 * (H + H.T)
-                H_safe = H_sym - eps * eye
-                delta = jnp.linalg.solve(H_safe, g)
-                th_next = jnp.clip(th - damping * delta, b[:, 0], b[:, 1])
-                return th_next, it + 1, converged_now
-
-            th_fin, _it_fin, _cv = jax.lax.while_loop(
-                cond,
-                body,
-                (theta0, jnp.asarray(0, dtype=jnp.int32), false_flag),
-            )
-            return th_fin
-
-        return run_m
-
-    if kind == "S":
-        # Inline one-step Newton-like ascent
-        b_arr = _normalize_bounds(bounds)
-        damping = _kw_float(one_step_kwargs, "damping", 0.1)
-        eps = _kw_float(one_step_kwargs, "eps", 1e-8)
-
-        def run_s(
-            theta0: JaxArray,
-            objective: Callable[[JaxArray], JaxArray],
-            _key: JaxArray,
-        ) -> JaxArray:
-            theta0 = jnp.asarray(theta0)
-            b = b_arr.astype(theta0.dtype)
-
-            def obj(th: JaxArray) -> JaxArray:
-                return jnp.asarray(objective(th))
-
-            g = cast("JaxArray", jax.grad(obj)(theta0))
-            H = cast("JaxArray", jax.hessian(obj)(theta0))
-            H_sym = 0.5 * (H + H.T)
-            eye = jnp.eye(theta0.shape[0], dtype=theta0.dtype)
-            H_safe = H_sym - eps * eye
-            delta = jnp.linalg.solve(H_safe, g)
-            theta_next = theta0 - damping * delta
-            return jnp.clip(theta_next, b[:, 0], b[:, 1])
-
-        return run_s
-
-    if kind == "B":
-        num_warmup = _kw_int(nuts_kwargs, "num_warmup", 500)
-        num_samples = _kw_int(nuts_kwargs, "num_samples", 1000)
-
-        def run_b(
-            theta0: JaxArray, objective: Callable[[JaxArray], JaxArray], key: JaxArray
-        ) -> JaxArray:
-            # Build a transition for the given objective by closing over it
-            # Only pass step parameters to transition builder; sampling counts used below
-            step_size = _kw_float(nuts_kwargs, "step_size", 1e-1)
-            max_num_doublings = _kw_int(nuts_kwargs, "max_num_doublings", 8)
-            inv_mass = _kw_jax_array_opt(nuts_kwargs, "inverse_mass_matrix")
-
-            def logprob(th: JaxArray) -> JaxArray:
-                return jnp.asarray(objective(th))
-
-            transition = build_bayes_transition(
-                logprob,
-                step_size=step_size,
-                max_num_doublings=max_num_doublings,
-                inverse_mass_matrix=inv_mass,
-            )
-
-            key, sub = jax.random.split(key)
-
-            def one_step(
-                theta_key: tuple[JaxArray, JaxArray], _unused: JaxArray
-            ) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
-                th, k = theta_key
-                th_new, k_new = transition(th, k)
-                return (th_new, k_new), th_new
-
-            (theta_warm_end, key_after), _ = cast(
-                "tuple[tuple[JaxArray, JaxArray], JaxArray]",
-                jax.lax.scan(one_step, (theta0, sub), jnp.arange(num_warmup)),
-            )
-            (_theta_end, _), samples = cast(
-                "tuple[tuple[JaxArray, JaxArray], JaxArray]",
-                jax.lax.scan(one_step, (theta_warm_end, key_after), jnp.arange(num_samples)),
-            )
-            # take last or mean; choose mean for stability
-            return jnp.mean(samples, axis=0)
-
-        return run_b
-
-    msg = f"Unknown estimator kind: {kind}"
-    raise ValueError(msg)
+    - kind 0: M -> solver_M(theta, aux)
+    - kind 1: B -> trans_B(theta, key, aux) (sampler returning mean)
+    - kind 2: S -> solver_S(theta, aux)
+    """
+    branches: tuple[Callable[[JaxArray, JaxArray], JaxArray], ...] = (
+        lambda th, _k: solver_M(th, aux),
+        lambda th, k_in: trans_B(th, k_in, aux),
+        lambda th, _k: solver_S(th, aux),
+    )
+    return cast("JaxArray", jax.lax.switch(kind_code_scalar, branches, theta0, key))
 
 
-def build_seed_runner(  # noqa: PLR0915, C901
+def build_seed_runner(  # noqa: PLR0915
     *,
     evaluator: LikelihoodEvaluator,
     model: DegenerateDiffusionProcess,
@@ -298,131 +241,73 @@ def build_seed_runner(  # noqa: PLR0915, C901
     according to ``plan``, mirroring the stage-0/final arrangement from the
     imperative version.
     """
-    sim_kernel = build_simulator_kernel(
-        model, t_max=config.t_max, h=config.h, burn_out=config.burn_out, dt=config.dt
+    sim_kernel = model.make_simulation_kernel(
+        t_max=config.t_max,
+        h=config.h,
+        burn_out=config.burn_out,
+        dt=config.dt,
     )
 
-    k0 = int(max(plan))
+    k0 = int(max(plan)) - 1
 
     # Prebuild stateless evaluators for each k in 1..k0 and wrap for lax.switch
-    l1p_fns = tuple(
+    branches_l1p = tuple(
         evaluator.make_stateless_quasi_l1_prime_evaluator(k=k) for k in range(1, k0 + 1)
     )
-    l1_fns = tuple(evaluator.make_stateless_quasi_l1_evaluator(k=k) for k in range(1, k0 + 1))
-    l2_fns = tuple(evaluator.make_stateless_quasi_l2_evaluator(k=k) for k in range(1, k0 + 1))
-    l3_fns = tuple(evaluator.make_stateless_quasi_l3_evaluator(k=k) for k in range(1, k0 + 1))
-
-    def _wrap_eval(
-        f: Callable[
-            [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-            JaxArray,
-        ],
-    ) -> Callable[
-        [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-        JaxArray,
-    ]:
-        def wrapped(
-            th: JaxArray,
-            t1b: JaxArray,
-            t2b: JaxArray,
-            t3b: JaxArray,
-            xs: JaxArray,
-            ys: JaxArray,
-            hh: JaxArray,
-            *,
-            _f: Callable[
-                [JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray, JaxArray],
-                JaxArray,
-            ] = f,
-        ) -> JaxArray:
-            return _f(th, t1b, t2b, t3b, xs, ys, hh)
-
-        return wrapped
-
-    branches_l1p = tuple(_wrap_eval(f) for f in l1p_fns)
-    branches_l1 = tuple(_wrap_eval(f) for f in l1_fns)
-    branches_l2 = tuple(_wrap_eval(f) for f in l2_fns)
-    branches_l3 = tuple(_wrap_eval(f) for f in l3_fns)
+    branches_l1 = tuple(evaluator.make_stateless_quasi_l1_evaluator(k=k) for k in range(1, k0 + 2))
+    branches_l2 = tuple(evaluator.make_stateless_quasi_l2_evaluator(k=k) for k in range(1, k0 + 1))
+    branches_l3 = tuple(evaluator.make_stateless_quasi_l3_evaluator(k=k) for k in range(1, k0 + 1))
 
     # Encode plan kinds as arrays for JAX-friendly selection
     kind_code = {"M": 0, "B": 1, "S": 2}
-    kinds1 = jnp.array([0] * (k0 + 2))
-    kinds2 = jnp.array([0] * (k0 + 2))
-    kinds3 = jnp.array([0] * (k0 + 2))
+    kinds1 = jnp.zeros((k0 + 2,), dtype=jnp.int32)
+    kinds2 = jnp.zeros((k0 + 2,), dtype=jnp.int32)
+    kinds3 = jnp.zeros((k0 + 2,), dtype=jnp.int32)
     for kk, triple in plan.items():
         k_i = int(kk)
         kinds1 = kinds1.at[k_i].set(kind_code[triple[0]])
         kinds2 = kinds2.at[k_i].set(kind_code[triple[1]])
         kinds3 = kinds3.at[k_i].set(kind_code[triple[2]])
 
-    # Prebuild solvers for each component and kind
-    solver1_M = _build_component_solver(
-        "M",
-        config.bounds_theta1,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver1_B = _build_component_solver(
-        "B",
-        config.bounds_theta1,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver1_S = _build_component_solver(
-        "S",
-        config.bounds_theta1,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver2_M = _build_component_solver(
-        "M",
-        config.bounds_theta2,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver2_B = _build_component_solver(
-        "B",
-        config.bounds_theta2,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver2_S = _build_component_solver(
-        "S",
-        config.bounds_theta2,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver3_M = _build_component_solver(
-        "M",
-        config.bounds_theta3,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver3_B = _build_component_solver(
-        "B",
-        config.bounds_theta3,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
-    )
-    solver3_S = _build_component_solver(
-        "S",
-        config.bounds_theta3,
-        newton_kwargs=config.newton_kwargs,
-        nuts_kwargs=config.nuts_kwargs,
-        one_step_kwargs=config.one_step_kwargs,
+    # Build aux-aware objectives once
+    obj1p_aux, obj1_aux, obj2_aux, obj3_aux = _make_objectives_with_aux(
+        branches_l1p, branches_l1, branches_l2, branches_l3
     )
 
-    def runner(  # noqa: PLR0915, C901
-        seed: int, theta_stage0_init: ThetaTriple
-    ) -> tuple[ThetaTriple, ThetaTriple]:
+    # Prebuild solver bundles per component using aux-based builders
+    comps1p = _build_component_solvers(
+        obj1p_aux,
+        config.bounds_theta1,
+        newton_kwargs=config.newton_kwargs,
+        one_step_kwargs=config.one_step_kwargs,
+        nuts_kwargs=config.nuts_kwargs,
+    )
+    comps1 = _build_component_solvers(
+        obj1_aux,
+        config.bounds_theta1,
+        newton_kwargs=config.newton_kwargs,
+        one_step_kwargs=config.one_step_kwargs,
+        nuts_kwargs=config.nuts_kwargs,
+    )
+    comps2 = _build_component_solvers(
+        obj2_aux,
+        config.bounds_theta2,
+        newton_kwargs=config.newton_kwargs,
+        one_step_kwargs=config.one_step_kwargs,
+        nuts_kwargs=config.nuts_kwargs,
+    )
+    comps3 = _build_component_solvers(
+        obj3_aux,
+        config.bounds_theta3,
+        newton_kwargs=config.newton_kwargs,
+        one_step_kwargs=config.one_step_kwargs,
+        nuts_kwargs=config.nuts_kwargs,
+    )
+
+    def runner(
+        seed: int,
+        theta_stage0_init: ThetaTriple,
+    ) -> tuple[JaxArray, JaxArray, JaxArray, JaxArray]:
         key = jax.random.PRNGKey(seed)
         # simulate
         d_x = model.x.shape[0]
@@ -431,245 +316,111 @@ def build_seed_runner(  # noqa: PLR0915, C901
         y0 = jnp.zeros((d_y,))
         x_series, y_series = sim_kernel(config.true_theta, key, x0, y0)
 
-        # initialize stage-0 parameters
-        stage0_prev = theta_stage0_init
+        # Common constants
+        h_arr_const = jnp.asarray(config.h)
 
-        def body(  # noqa: PLR0915, C901
+        def body(
             carry: tuple[ThetaTriple, JaxArray],
             k: JaxArray,
-        ) -> tuple[tuple[ThetaTriple, JaxArray], tuple[ThetaTriple, ThetaTriple]]:
+        ) -> tuple[tuple[ThetaTriple, JaxArray], tuple[JaxArray, JaxArray, JaxArray, JaxArray]]:
             (theta_bar, key_in) = carry
             # objectives for this k selected via lax.switch
-            idx0 = jnp.asarray(k - 1, dtype=jnp.int32)
-            h_arr = jnp.asarray(config.h)
-
-            def obj1p(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx0,
-                        branches_l1p,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
-
-            def obj1(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx0,
-                        branches_l1,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
-
-            def obj2(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx0,
-                        branches_l2,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
-
-            def obj3(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx0,
-                        branches_l3,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
+            k = jnp.asarray(k, dtype=jnp.int32)
+            idx = k - 1
+            # aux payload passed to aux-aware objectives/solvers
+            aux = (idx, theta_bar, x_series, y_series, h_arr_const)
 
             # split keys per component and final
-            key_in, k1, k2, k3, kf = jax.random.split(key_in, 5)
+            key_in, k1, k2, k3, k3f, k1f = jax.random.split(key_in, 6)
 
-            idx = jnp.asarray(k, dtype=jnp.int32)
-            kind1 = kinds1[idx]
-            kind2 = kinds2[idx]
-            kind3 = kinds3[idx]
+            kind1 = kinds1[k]
+            kind2 = kinds2[k]
+            kind3 = kinds3[k]
 
-            # Build per-component branch runners capturing objectives
-            def run1_M(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_M(th, obj1p, key_run)
-
-            def run1_B(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_B(th, obj1p, key_run)
-
-            def run1_S(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_S(th, obj1p, key_run)
-
-            branches1_local: tuple[BranchRunner, ...] = (run1_M, run1_B, run1_S)
-
-            def run2_M(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver2_M(th, obj2, key_run)
-
-            def run2_B(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver2_B(th, obj2, key_run)
-
-            def run2_S(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver2_S(th, obj2, key_run)
-
-            branches2_local: tuple[BranchRunner, ...] = (run2_M, run2_B, run2_S)
-
-            def run3_M(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver3_M(th, obj3, key_run)
-
-            def run3_B(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver3_B(th, obj3, key_run)
-
-            def run3_S(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver3_S(th, obj3, key_run)
-
-            branches3_local: tuple[BranchRunner, ...] = (run3_M, run3_B, run3_S)
-
-            theta1_k0 = cast(
-                "JaxArray",
-                jax.lax.switch(kind1, branches1_local, theta_bar[0], k1),
+            # Use common runner for three components
+            theta1_k0 = _run_by_kind(
+                kind1,
+                theta_bar[0],
+                k1,
+                aux,
+                solver_M=comps1p.m,
+                solver_S=comps1p.s,
+                trans_B=comps1p.b,
             )
-            theta2_k0 = cast(
-                "JaxArray",
-                jax.lax.switch(kind2, branches2_local, theta_bar[1], k2),
+            theta_bar = (theta1_k0, theta_bar[1], theta_bar[2])
+            aux = (idx, theta_bar, x_series, y_series, h_arr_const)
+            theta2_k0 = _run_by_kind(
+                kind2,
+                theta_bar[1],
+                k2,
+                aux,
+                solver_M=comps2.m,
+                solver_S=comps2.s,
+                trans_B=comps2.b,
             )
-            theta3_k0 = cast(
-                "JaxArray",
-                jax.lax.switch(kind3, branches3_local, theta_bar[2], k3),
+            theta_bar = (theta1_k0, theta2_k0, theta_bar[2])
+            aux = (idx, theta_bar, x_series, y_series, h_arr_const)
+            theta3_k0 = _run_by_kind(
+                kind3,
+                theta_bar[2],
+                k3,
+                aux,
+                solver_M=comps3.m,
+                solver_S=comps3.s,
+                trans_B=comps3.b,
             )
 
-            stage0_now = (theta1_k0, theta2_k0, theta3_k0)
+            theta_bar = (theta1_k0, theta2_k0, theta3_k0)
+            aux = (idx, theta_bar, x_series, y_series, h_arr_const)
 
             # final stage adjustments
-            kind3_next = kinds3[idx + 1]
+            kind3_next = kinds3[k + 1]
             # If k==1 use estimator at k+1 for theta3; else keep stage0
-            use_update = jnp.equal(idx, 1)
-
-            max_idx = jnp.asarray(k0 - 1, dtype=jnp.int32)
-            idx_next = jnp.minimum(idx0 + 1, max_idx)
-
-            def obj3_next(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx_next,
-                        branches_l3,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
+            use_update = jnp.equal(k, 1)
 
             def do_update(_: tuple[JaxArray, JaxArray, JaxArray]) -> JaxArray:
-                def run3n_M(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                    return solver3_M(th, obj3_next, key_run)
-
-                def run3n_B(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                    return solver3_B(th, obj3_next, key_run)
-
-                def run3n_S(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                    return solver3_S(th, obj3_next, key_run)
-
-                branches3_next: tuple[BranchRunner, ...] = (run3n_M, run3n_B, run3n_S)
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(kind3_next, branches3_next, stage0_now[2], kf),
+                return _run_by_kind(
+                    kind3_next,
+                    theta_bar[2],
+                    k3f,
+                    aux,
+                    solver_M=comps3.m,
+                    solver_S=comps3.s,
+                    trans_B=comps3.b,
                 )
 
             def keep_stage0(_: tuple[JaxArray, JaxArray, JaxArray]) -> JaxArray:
-                return stage0_now[2]
+                return theta_bar[2]
 
-            theta3_final = cast(
+            theta3_k0 = cast(
                 "JaxArray",
-                jax.lax.cond(use_update, do_update, keep_stage0, stage0_now),
+                jax.lax.cond(use_update, do_update, keep_stage0, theta_bar),
             )
 
-            theta_bar_final = (stage0_now[0], stage0_now[1], theta3_final)
-            kind1_next = kinds1[idx + 1]
+            theta_bar = (theta_bar[0], theta_bar[1], theta3_k0)
+            aux = (idx + 1, theta_bar, x_series, y_series, h_arr_const)
 
-            def obj1_next(th: JaxArray) -> JaxArray:
-                return cast(
-                    "JaxArray",
-                    jax.lax.switch(
-                        idx_next,
-                        branches_l1,
-                        th,
-                        theta_bar[0],
-                        theta_bar[1],
-                        theta_bar[2],
-                        x_series,
-                        y_series,
-                        h_arr,
-                    ),
-                )
+            kind1_next = kinds1[k + 1]
 
-            def run1n_M(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_M(th, obj1_next, key_run)
-
-            def run1n_B(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_B(th, obj1_next, key_run)
-
-            def run1n_S(th: JaxArray, key_run: JaxArray) -> JaxArray:
-                return solver1_S(th, obj1_next, key_run)
-
-            branches1_next: tuple[BranchRunner, ...] = (run1n_M, run1n_B, run1n_S)
-            theta1_final = cast(
-                "JaxArray",
-                jax.lax.switch(kind1_next, branches1_next, theta_bar_final[0], kf),
+            theta1_final = _run_by_kind(
+                kind1_next,
+                theta_bar[0],
+                k1f,
+                aux,
+                solver_M=comps1.m,
+                solver_S=comps1.s,
+                trans_B=comps1.b,
             )
-            theta2_final = stage0_now[1]
-
-            next_theta_bar = (theta1_final, theta2_final, theta3_final)
+            result = (theta_bar[0], theta1_final, theta_bar[1], theta_bar[2])
             next_key = key_in
-            return (next_theta_bar, next_key), (stage0_now, next_theta_bar)
+            return (theta_bar, next_key), result
 
-        init_carry = (stage0_prev, key)
+        init_carry = (theta_stage0_init, key)
         ks = jnp.arange(1, k0 + 1, dtype=jnp.int32)
-        last_carry, outs = cast(
-            "tuple[tuple[ThetaTriple, JaxArray], tuple[ThetaTriple, ThetaTriple]]",
+        _last_carry, outs = cast(
+            "tuple[tuple[ThetaTriple, JaxArray], tuple[JaxArray, JaxArray, JaxArray, JaxArray]]",
             jax.lax.scan(body, init_carry, ks),
         )
-        last_stage0_all, last_final_all = outs
-        # take last along time
-        last_stage0 = (
-            last_stage0_all[0][-1],
-            last_stage0_all[1][-1],
-            last_stage0_all[2][-1],
-        )
-        last_final = (
-            last_final_all[0][-1],
-            last_final_all[1][-1],
-            last_final_all[2][-1],
-        )
-        _ = last_carry  # silence lints
-        return last_stage0, last_final
+        return outs
 
     return jax.jit(runner)
