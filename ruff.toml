@@ -106,3 +106,4 @@ docstring-code-format = true
     "D",    # Docstring 全般
     "S",    # Bandit 系（実験ノートで警告がち）
 ]
+"experiment/**" = ["ALL"]
