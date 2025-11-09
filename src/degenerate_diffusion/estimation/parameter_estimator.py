@@ -316,8 +316,55 @@ def build_m(
 # (removed) build_bayes_transition: use aux-based internals only; inline transition in sampler
 
 
+def _log_prior_component(theta_val: JaxArray, low: JaxArray, high: JaxArray) -> JaxArray:
+    finite_low = jnp.isfinite(low)
+    finite_high = jnp.isfinite(high)
+
+    def both_finite(_: None) -> JaxArray:
+        width = high - low
+        log_norm = -jnp.log(width)
+        inside = jnp.logical_and(theta_val >= low, theta_val <= high)
+        return jnp.where(inside, log_norm, -jnp.inf)
+
+    def only_low(_: None) -> JaxArray:
+        shifted = theta_val - low
+        log_pdf = -shifted
+        return jnp.where(theta_val >= low, log_pdf, -jnp.inf)
+
+    def only_high(_: None) -> JaxArray:
+        shifted = high - theta_val
+        log_pdf = -shifted
+        return jnp.where(theta_val <= high, log_pdf, -jnp.inf)
+
+    def both_inf(_: None) -> JaxArray:
+        log_norm = -jnp.log(10.0 * jnp.sqrt(2.0 * jnp.pi))
+        standardized = theta_val / 10.0
+        return log_norm - 0.5 * standardized**2
+
+    return cast(
+        "JaxArray",
+        jax.lax.cond(
+            jnp.logical_and(finite_low, finite_high),
+            both_finite,
+            lambda _: jax.lax.cond(
+                finite_low,
+                only_low,
+                lambda _: jax.lax.cond(finite_high, only_high, both_inf, None),
+                None,
+            ),
+            None,
+        ),
+    )
+
+
+def _log_prior_from_bounds(theta: JaxArray, bounds: JaxArray) -> JaxArray:
+    logps = jax.vmap(_log_prior_component)(theta, bounds[:, 0], bounds[:, 1])
+    return jnp.sum(logps)
+
+
 def build_b(
     logprob_fn: Callable[[JaxArray, Aux], JaxArray],
+    bounds: Bounds | JaxArray | None = None,
     *,
     step_size: float = 1e-1,
     inverse_mass_matrix: JaxArray | None = None,
@@ -336,12 +383,21 @@ def build_b(
     num_warmup_i = int(num_warmup)
     num_samples_i = int(num_samples)
     thin_i = int(max(thin, 1))
+    bounds_arr = None
+    if bounds is not None:
+        bounds_arr = _normalize_bounds(bounds) if not isinstance(bounds, jax.Array) else bounds
 
     def run(theta0: JaxArray, key: JaxArray, aux: Aux) -> JaxArray:
         theta0 = jnp.asarray(theta0)
+        bounds_cast = None
+        if bounds_arr is not None:
+            theta0, bounds_cast = _prepare_theta_and_bounds(theta0, bounds_arr)
 
         def logprob(th: JaxArray) -> JaxArray:
-            return jnp.asarray(logprob_fn(th, aux))
+            base = jnp.asarray(logprob_fn(th, aux))
+            if bounds_cast is not None:
+                base = base + _log_prior_from_bounds(th, bounds_cast)
+            return base
 
         def _thin_transition(
             carry: tuple[SamplingState, JaxArray],

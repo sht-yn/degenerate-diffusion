@@ -87,15 +87,16 @@ def _build_component_solvers(
     s = build_s(
         objective_with_aux,
         bounds,
-        damping=_kw_float(one_step_kwargs, "damping", 0.1),
+        damping=_kw_float(one_step_kwargs, "damping", 1),
         eps=_kw_float(one_step_kwargs, "eps", 1e-8),
     )
     b = build_b(
         objective_with_aux,
+        bounds,
         step_size=_kw_float(nuts_kwargs, "step_size", 1e-1),
         inverse_mass_matrix=_kw_jax_array_opt(nuts_kwargs, "inverse_mass_matrix"),
-        num_warmup=_kw_int(nuts_kwargs, "num_warmup", 500),
-        num_samples=_kw_int(nuts_kwargs, "num_samples", 1000),
+        num_warmup=_kw_int(nuts_kwargs, "num_warmup", 1000),
+        num_samples=_kw_int(nuts_kwargs, "num_samples", 3000),
         thin=_kw_int(nuts_kwargs, "thin", 1),
         target_acceptance_rate=_kw_float(nuts_kwargs, "target_acceptance_rate", 0.75),
     )
